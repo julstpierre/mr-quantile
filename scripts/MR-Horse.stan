@@ -1,3 +1,7 @@
+// Provides the STAN implementation of the MR-Horse method described in 
+// Grant, AJ and Burgess, S (2024). A Bayesian approach to Mendelian randomization 
+// using summary statistics in the univariable and multivariable settings with correlated pleiotropy. 
+// American Journal of Human Genetics. 111(1):165-180. doi: https://doi.org/10.1016/j.ajhg.2023.12.002
 
 data {
   int<lower=0> p;              // number of instruments
