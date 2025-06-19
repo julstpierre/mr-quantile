@@ -6,78 +6,81 @@ sim_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation scenario, fraction of invalid IVs and theta
   #--------------------------------------------------------------------------------
-  # args <- data.frame(scenario = 1, frac = 0.1, theta1 = 0)
-  if (args$theta1 == 0) {
-    theta <- c(0, -0.1, 0.1, 0.2)
-  } else if (args$theta1 == 0.2){
-    theta <- c(0.2, 0.1, 0.3, 0.4)
-  }
-  n <- 20000
-  p <- 100
-  k <- 4
+  # args <- data.frame(scenario = 1, frac = 0.1, theta = 0)
+  theta <- args$theta
+  n <- 10000
+  p <- 30
   
   #--------------------------------------------------------------------------------
-  # Scenario 1 : Balanced pleiotropy and InSIDE assumption met
+  # Scenario 1 : Balanced pleiotropy, InSIDE assumption met
   #--------------------------------------------------------------------------------
   if (args$scenario == 1){
-    delta <- rep(0, p) 
-    alpha <- rnorm(p, 0, 0.2)
+    phi <- rep(0, p) 
+    alpha <- rnorm(p, 0, 0.15)
   }
   
   #--------------------------------------------------------------------------------
-  # Scenario 2 : Directional pleiotropy and InSIDE assumption met
+  # Scenario 2 : Directional pleiotropy, InSIDE assumption met
   #--------------------------------------------------------------------------------
   if (args$scenario == 2){
-    delta <- rep(0, p) 
-    alpha <- rnorm(p, 0.1, 0.2)
+    phi <- rep(0, p) 
+    alpha <- rnorm(p, 0.1, 0.075)
   }
   
   #--------------------------------------------------------------------------------
-  # Scenario 3 : Directional pleiotropy and InSIDE assumption violated
+  # Scenario 3 : Positive directional pleiotropy, InSIDE assumption violated
   #--------------------------------------------------------------------------------
   if (args$scenario == 3){
-    delta <- runif(p, 0, 0.1)
-    alpha <- rnorm(p, 0, 0.2)
+    phi <- runif(p, 0, 0.1)
+    alpha <- rnorm(p, 0.1, 0.075)
   }
   
   #--------------------------------------------------------------------------------
-  # For each scenario either 10%, 30%, 50% or 70% of genetic variants are invalid
+  # Scenario 4 : Negative directional pleiotropy, InSIDE assumption violated
+  #--------------------------------------------------------------------------------
+  if (args$scenario == 4){
+    phi <- runif(p, 0, 0.1)
+    alpha <- rnorm(p, -0.1, 0.075)
+  }
+  
+  #--------------------------------------------------------------------------------
+  # For each scenario either 30%, 50% or 70% of genetic variants are invalid
   #--------------------------------------------------------------------------------
   valid.IVs <- sample(1:p, (1-args$frac)*p)
   invalid.IVs <- setdiff(1:p, valid.IVs)
-  delta[valid.IVs] <- 0
+  phi[valid.IVs] <- 0
   alpha[valid.IVs] <- 0
   
   #--------------------------------------------------------------------------------
   # Simulate data
   #--------------------------------------------------------------------------------
-  gamma_x <- rep(1/k, k)
-  gamma_y <- 1
-  beta0 <- 0
-  beta_x <- sapply(1:k, function(i) runif(p, 0, 0.1))
-  theta0 <- 0
+  # Simulate genetic data and confounder
+  maf <- runif(p, 0.1, 0.5)
+  G <- sapply(1:p, function(j) rbinom(2 * n, 2, maf[j]))
+  U <- G %*% phi + rnorm(2 * n)
   
-  G <- replicate(p, rbinom(2 * n, 2, 0.3))
-  U <- G %*% delta + rnorm(2 * n)
-  X <- beta0 + G %*% beta_x + U %*% gamma_x + mvrnorm(2 * n, rep(0, k), diag(k))
-  Y <- theta0 + X %*% theta + G %*% alpha + gamma_y * U + rnorm(2 * n)
+  # Simulate uniform genetic effects such that the total proportion of variance explained 
+  # in the exposure by direct effects of the genetic variants is on average 10%
+  sigma2_gamma <- 1/9 * (var(U) + 1) * n / sum(G^2)
+  gamma <- runif(p, 0, sqrt(12 * sigma2_gamma))
+  
+  # Simulate exposure and outcome
+  X <- G %*% gamma + U + rnorm(2 * n)
+  Y <- G %*% alpha + theta * X + U + rnorm(2 * n)
   
   #--------------------------------------------------------------------------------
   # Genetic variant-trait association
   #--------------------------------------------------------------------------------
-  indices <- expand.grid(1:p, 1:k) %>% rename(p = Var1, k = Var2)
   sampX = seq(1, n)
   sampY = seq((n+1), (2*n))
   
   # Summary stats for X
-  beta_hat_x <- unname(sapply(1:nrow(indices), function(i) coef(lm(X[sampX, indices[i, "k"]] ~ G[sampX, indices[i, "p"]]))[-1])) %>%
-                matrix(nrow = p)
-  sigma2_x <- unname(sapply(1:nrow(indices), function(i) coefficients(summary(lm(X[sampX, indices[i, "k"]] ~ G[sampX, indices[i, "p"]])))[2, "Std. Error"]^2)) %>%
-    matrix(nrow = p)
+  beta_hat_x <- unname(sapply(1:p, function(i) coef(lm(X[sampX] ~ G[sampX, i]))[-1]))
+  sigma2_x <- unname(sapply(1:p, function(i) coefficients(summary(lm(X[sampX] ~ G[sampX, i])))[2, "Std. Error"]^2))
   
   # Summary stats for Y
-  beta_hat_y <- unname(sapply(1:p, function(i) coef(lm(Y[(n+1):(2*n)] ~ G[(n+1):(2*n), i]))[-1]))
-  sigma2_y <- unname(sapply(1:p, function(i) coefficients(summary(lm(Y[(n+1):(2*n)] ~ G[(n+1):(2*n), i])))[2, "Std. Error"]^2))
+  beta_hat_y <- unname(sapply(1:p, function(i) coef(lm(Y[sampY] ~ G[sampY, i]))[-1]))
+  sigma2_y <- unname(sapply(1:p, function(i) coefficients(summary(lm(Y[sampY] ~ G[sampY, i])))[2, "Std. Error"]^2))
   
   return(list("beta_hat_x" = beta_hat_x, 
               "sigma2_x" = sigma2_x, 
@@ -86,7 +89,7 @@ sim_dat <- function(args){
               "valid.IVs" = valid.IVs,
               "scenario" = args$scenario,
               "frac" = args$frac,
-              "theta1" = args$theta1
+              "theta" = args$theta
               )
          )
 }
@@ -167,48 +170,4 @@ theta_lasso <- function(D){
     )
     )
     return(cbind("Estimate" = unname(theta_lasso_ivw$Estimate[1]), "StdError" = unname(theta_lasso_ivw$StdError[1]), "Pvalue" = unname(theta_lasso_ivw$Pvalue[1])))
-}
-
-#--------------------------------------------------------------------------------
-# Fit MR_qr_lasso on simulated data
-#--------------------------------------------------------------------------------
-theta_qrlasso <- function(D, tau = 0.5){
-  p <- length(D$beta_hat_y)
-  k <- dim(D$beta_hat_x)[2]
-  
-  # Change allele orientation and fit lasso model
-  BYG <- D$beta_hat_y*sign(D$beta_hat_x)
-  BXG <- abs(D$beta_hat_x)
-  fit.qrlasso <- hqreg_raw(cbind(diag(rep(1, p)), BXG), 
-                           BYG, 
-                           # weights = D$sigma2_y^-1,
-                           intercept = FALSE,
-                           penalty.factor = c(rep(1, p), rep(0, k)),
-                           method = "quantile", 
-                           tau = tau)
-  
-  # Select best model using the heterogeneity stopping rule
-  nlambda <- length(fit.qrlasso$lambda)
-  lasso.path.IVs <- sapply(1:nlambda, function(i) which(fit.qrlasso$beta[1:p, i] == 0)) %>% rev()
-  df.i <- lapply(1:nlambda, function(i) data.frame(D$beta_hat_y, D$beta_hat_x, D$sigma2_y^-1)[lasso.path.IVs[[i]], ])
-  lm.i <- lapply(1:nlambda, function(i) summary(lm(D.beta_hat_y~-1+X1+X2+X3+X4, weights = D.sigma2_y..1, data = df.i[[i]])))
-  J <- sapply(lasso.path.IVs, length)
-  RSE <- sapply(1:nlambda, function(i) lm.i[[i]]$sigma)
-  
-  het <- which((RSE[-1] > 1) & (diff(RSE) > (qchisq(0.95, df = 1) / J[-1])))
-  if (length(het) == 0){
-    lam_pos = 1
-  } else {
-    lam_pos = min(het)
-  }
-  
-  # Fit IVW estimator using the selected IVs
-  v <- lasso.path.IVs[[lam_pos]]
-  theta_lasso_ivw <- mr_mvivw(mr_mvinput(bx = D$beta_hat_x[v, ], 
-                                         bxse = sqrt(D$sigma2_x)[v, ],
-                                         by = D$beta_hat_y[v], 
-                                         byse = sqrt(D$sigma2_y)[v]
-  )
-  )
-  return(cbind("Estimate" = unname(theta_lasso_ivw$Estimate[1]), "StdError" = unname(theta_lasso_ivw$StdError[1]), "Pvalue" = unname(theta_lasso_ivw$Pvalue[1])))
 }
