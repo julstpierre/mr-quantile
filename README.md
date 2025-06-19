@@ -1,6 +1,6 @@
 # BayesFuseMR
 
-This repository provides the R and Stan code to implement our Bayesian fused shrinkage model for MR studies names BayesFuseMR, along with scripts to reproduce the simulations and results described in our ongoing manuscript.
+This repository provides the R and Stan code to implement our Bayesian fused shrinkage model for MR studies called BayesFuseMR, along with scripts to reproduce the simulations and results described in our ongoing manuscript.
 
 ## To do :
 
