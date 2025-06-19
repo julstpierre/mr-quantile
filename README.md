@@ -1,11 +1,11 @@
-# MR
+# BayesFuseMR
 
-Provides the R code to implement the methods and reproduce the simulation results described in
-
-Slob EAW, Burgess S. A comparison of robust Mendelian randomization methods using summary data. Genetic Epidemiology. 2020;44:313–329. https://doi.org/10.1002/gepi.22295
+This repository provides the R and Stan code to implement our Bayesian fused shrinkage model for MR studies names BayesFuseMR, along with scripts to reproduce the simulations and results described in our ongoing manuscript.
 
 ## To do :
 
-1 - Reproduce results from the paper
+1 - Implement the BayesFuseMR model.
 
-2 - Simulate distributions with heavier tails
+2 - Run simulations.
+
+3 - Real data analysis.
