@@ -12,7 +12,6 @@ library(cmdstanr)
 library(posterior)
 library(bayesplot)
 library(dplyr)
-color_scheme_set("brightblue")
 
 #-----------------------
 # Installing CmdStan
@@ -22,7 +21,7 @@ cmdstan_path()
 cmdstan_version()
 
 #-----------------------
-# Compiling a model
+# Compiling the model
 # ----------------------
 file <- file.path(getwd(), "MR-Horse.stan")
 mod <- cmdstan_model(file)
@@ -33,7 +32,8 @@ mod$exe_file()
 # Simulate data
 #-----------------------
 # Simulation parameters
-args <- data.frame(frac = 0.25, beta = 0)
+set.seed(123)
+args <- data.frame(frac = 0.25, beta = 0.2)
 beta <- args$beta
 n <- 10000
 p <- 30
@@ -77,15 +77,15 @@ data_list <- list(p= p,
                   sigma_y = sqrt(sigma2_y),
                   sigma_x = sqrt(sigma2_x),
                   scale_global = 1,
-                  slab_scale = 1,
-                  slab_df = 12
+                  slab_scale = 0.3,
+                  slab_df = 4
                   )
 fit <- mod$sample(
   data = data_list,
-  # seed = 123,
+  seed = 123,
   chains = 4,
   parallel_chains = 4,
-  adapt_delta = 0.85,
+  adapt_delta = 0.9,
   init = rep(list(list(beta = median(beta_hat_y / beta_hat_x), alpha = rep(0, p))), 4),
   refresh = 500 # print update every 500 iters,
 )
@@ -93,12 +93,36 @@ fit <- mod$sample(
 #----------------------------
 # Posterior summary statistics
 #----------------------------
+# Summary of the posterior distribution
 fit$summary(
-  variables = c("beta", "alpha"),
+  variables = c("beta", "alpha", "tau", "c"),
   "mean", "sd", "median",
-  qvalue = ~ 2 * pmin(mean(. < 0), mean(. > 0)),
+  pep = ~ 2 * pmin(mean(. < 0), mean(. > 0)),
   extra_quantiles = ~posterior::quantile2(., probs = c(.0275, .975))
 ) %>% print(n=Inf)
+
+# Sort alpha's by posterior error prob. and select invalid instruments with a FDR < 0.05
+fit$summary(variables = "alpha", "mean", pep = ~ 2 * pmin(mean(. < 0), mean(. > 0))) %>%
+  arrange(pep) %>%
+  mutate(qvalue = cummean(pep)) %>%
+  filter(qvalue < .05) %>%
+  mutate(index = as.integer(gsub("alpha\\[(\\d+)\\]", "\\1", variable))) %>%
+  arrange(index) %>%
+  select(-pep, -qvalue, -index)
+
+# Compare with true non-zero alpha's
+data.frame(variable = paste0("alpha[", which(alpha != 0), "]"), mean = round(alpha[which(alpha != 0)], 4)) %>%
+  tibble()
+
+# Plot of number of invalid instruments as a function of the FDR
+library(ggplot2)
+fit$summary(variables = "alpha", pep = ~ 2 * pmin(mean(. < 0), mean(. > 0))) %>%
+  arrange(pep) %>%
+  mutate(qvalue = cummean(pep),  n = row_number()) %>%
+  ggplot(aes(x = qvalue, y = n)) +
+  geom_line() +
+  labs(x = "FDR", y = "Number of invalid instruments") +
+  theme_minimal()
 
 #----------------------------
 # Posterior draws

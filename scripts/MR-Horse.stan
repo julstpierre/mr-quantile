@@ -52,8 +52,7 @@ transformed parameters{
 model {
   // Normal likelihood
   for (i in 1:p){
-    Gamma_hat_y[i] ~ normal(theta[i], sigma_y[i]);
-    gamma_hat_x[i] ~ normal(gamma_x[i], sigma_x[i]);
+    Gamma_hat_y[i] ~ normal(theta[i] * gamma_hat_x[i], sigma_y[i]);
   }
   
   // Priors for hyperparameters

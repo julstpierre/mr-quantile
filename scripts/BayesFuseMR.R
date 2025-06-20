@@ -10,7 +10,6 @@ library(cmdstanr)
 library(posterior)
 library(bayesplot)
 library(dplyr)
-color_scheme_set("brightblue")
 
 #-----------------------
 # Installing CmdStan
@@ -20,7 +19,7 @@ cmdstan_path()
 cmdstan_version()
 
 #-----------------------
-# Compiling a model
+# Compiling the model
 # ----------------------
 file <- file.path(getwd(), "BayesFuseMR.stan")
 mod <- cmdstan_model(file)
@@ -70,6 +69,13 @@ sigma2_y <- unname(sapply(1:p, function(i) coefficients(summary(lm(Y[sampY] ~ G[
 
 # Sort the data by increasing value of the ratios
 ratios <- beta_hat_y / beta_hat_x
+data.df <- data.frame(
+  beta_hat_y = beta_hat_y[order(ratios)],
+  beta_hat_x = beta_hat_x[order(ratios)],
+  sigma_y   = sqrt(sigma2_y)[order(ratios)],
+  sigma_x   = sqrt(sigma2_x)[order(ratios)],
+  ratios     = ratios[order(ratios)]
+)
 
 # Find tau_0
 p_0 <- p/2
@@ -82,11 +88,11 @@ tau0 <- which(sapply(1:length(seq_tau0), function(i) sum( 1 / ( 1 + seq_tau0[i]^
 
 # Fit model
 data_list <- list(p= p, 
-                  Gamma_hat_y = beta_hat_y[order(ratios)], 
-                  gamma_hat_x = beta_hat_x[order(ratios)], 
-                  sigma_y = sqrt(sigma2_y)[order(ratios)],
-                  sigma_x = sqrt(sigma2_x)[order(ratios)],
-                  scale_global = tau0,
+                  Gamma_hat_y = data.df$beta_hat_y, 
+                  gamma_hat_x = data.df$beta_hat_x, 
+                  sigma_y = data.df$sigma_y,
+                  sigma_x = data.df$sigma_x,
+                  scale_global = 1,
                   slab_scale = 1,
                   slab_df = 12
                   )
@@ -104,9 +110,9 @@ fit <- mod$sample(
 # Posterior summary statistics
 #----------------------------
 fit$summary(
-  variables = c("beta", "alpha", "caux", "tau", "lambda", "lambda_tilde"),
+  variables = c("beta", "theta"),
   "mean", "sd", "median",
-  qvalue = ~ 2 * pmin(mean(. < 0), mean(. > 0)),
+  pep = ~ 2 * pmin(mean(. < 0), mean(. > 0)),
   extra_quantiles = ~posterior::quantile2(., probs = c(.0275, .975))
 ) %>% print(n=Inf)
 

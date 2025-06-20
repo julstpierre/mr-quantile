@@ -13,7 +13,8 @@ data {
 parameters {
   real beta;                     // causal effect                
   vector[2*p] z;                 // auxiliary variable
-  real mu;                       // mean of gamma_x          
+  real mu;                       // mean of gamma_x
+  real<lower=0> sy;              // standard deviation of alpha_j
   real<lower=0> sx;              // standard deviation of gamma_x
   vector<lower=0, upper=1>[p] r; // correlation hyperparameter
   vector<lower=0>[p] aux1_local;
@@ -32,6 +33,7 @@ transformed parameters{
   real<lower=0> tau; // global scale parameter
   real<lower=0> c; // slab scale
   vector[p] theta; // linear predictor
+  vector[p-1] eta; // pairwise difference between elements of theta
   
   // The order of the statements is important, for example defining alpha before gamma_x ! 
   rho = 2 * r - 1;
@@ -40,9 +42,11 @@ transformed parameters{
   c = slab_scale * sqrt(caux);
   lambda_tilde = sqrt( c^2 * square(lambda) ./ ( c^2 + tau^2 * square(lambda) ) );
   
-  alpha = z[p+1:] .* lambda_tilde * tau ;
-  gamma_x = mu + rho * sx ./ ( tau * lambda_tilde ) .* alpha + z[1:p] .* sqrt( 1.0 - square(rho) ) * sx;
+  alpha = z[p+1:] .* sy ;
+  gamma_x = mu + rho * ( sx ./ sy ) .* alpha + z[1:p] .* sqrt( 1.0 - square(rho) ) * sx;
   theta = beta * gamma_x + alpha;
+  for (i in 1:(p - 1))
+    eta[i] = theta[i + 1] - theta[i];
 }
 
 model {
@@ -56,6 +60,7 @@ model {
   z ~ normal(0, 1);
   mu ~ normal(0, 1);
   sx ~ normal(0, 1);
+  sy ~ normal(0, 1);
   beta ~ normal(0, 1);
   r ~ beta(10, 10);
   
