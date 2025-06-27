@@ -2,8 +2,8 @@ library(quantreg)
 library(MendelianRandomization)
 
 # Load simulated data
-load("Data/sim_dat_null.R")
-load("Data/sim_dat.R")
+load("../Data/sim_dat_null.R")
+load("../Data/sim_dat.R")
 
 # Load example
 D <- D_S3_50[[1]]
