@@ -15,7 +15,6 @@ Depends: R (>= 3.5.0)
 Imports: 
     cmdstanr,
     posterior,
-    bayesplot,
     tidyr,
     dplyr,
     ggplot2

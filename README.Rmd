@@ -30,40 +30,55 @@ If you don't already have CmdStan installed then, in addition to installing the 
 devtools::install_github("julstpierre/BayesFuseMR")
 ```
 
-We can now load the package like any other R package. We’ll also load the **bayesplot** and **posterior** packages to use later in examples.
+We can now load the package like any other R package. We’ll also load the **bayesplot** and **dplyr** packages to use later in examples.
 ```{r libraries, message = FALSE, warning = FALSE}
 library(BayesFuseMR)
 library(bayesplot)
-library(posterior)
+library(dplyr)
 ```
 
 ### Load example data
-We provide a dummy dataset in the package to illustrate how to use the `fit_BayesFuseMR()` function. This dataset contains simulated summary statistics from p=30 SNPs for one continuous exposure and one continuous outcome.
+We provide a dummy dataset in the package to illustrate how to use the `fit_BayesFuseMR()` function. This dataset contains simulated summary statistics from 30 SNPs for one continuous exposure and one continuous outcome.
 ```{r load-data}
 data("dummy_data")
 head(dummy_data)
 ```
 
-### Fit the model
-The function `fit_BayesFuseMR()` fits a Bayesian fused shrinkage model using MCMC. It takes as input the estimated effect sizes for the exposure and outcome with their standard errors, and returns a fitted `cmdstanr` object.
+### Running MCMC
+The function `fit_BayesFuseMR()` fits a Bayesian fused shrinkage model using MCMC. It takes as input the estimated effect sizes for the exposure and outcome with their standard errors, and returns a fitted `cmdstanr` object. We can use a seed when sampling for reproducibility.
 ```{r fit-model, message = FALSE}
 fit <- fit_BayesFuseMR(
   beta_hat_y = dummy_data$beta_hat_y,
   beta_hat_x = dummy_data$beta_hat_x,
   sigma_y = dummy_data$sigma_y,
   sigma_x = dummy_data$sigma_x,
-  snps = paste0("SNP", 1:nrow(dummy_data))
+  snps = paste0("SNP", 1:nrow(dummy_data)),
+  seed = 123
 )
 ```
 
-### Posterior summaries
+### Posterior summary statistics
 You can use the `summary` method to get posterior summaries of all parameters. Here, we combine the SNP identifiers with the posterior summaries of the `theta` parameter, which represents the ratio estimate for each variant.
-```{r summary-fit}
+```{r summary}
 fit_summary <- cbind(snp = fit$snps, fit$posterior$summary(variables = c("theta")))
 head(fit_summary)
 ```
 
-The function `clust_BayesFuseMR()` identifies clusters and computes weighted cluster means, standard errors, and confidence intervals.
+### Posterior draws
+You can extract the posterior draws for further analysis or visualization. The `draws()` method returns a `draws_df` object, which can be converted to a data frame for easier manipulation. For example, we can look at the trace plots and density plots of the posterior draws for the `theta` parameter to ensure convergence of the MCMC chains.
+```{r trace plots, fig.width = 10, fig.height = 6}
+# Trace plots for theta
+mcmc_trace(fit$posterior$draws("theta"))
+```
+
+```{r density plots, fig.width = 10, fig.height = 6}
+# Density plots for theta
+mcmc_dens_chains(fit$posterior$draws("theta"))
+```
+
+### Clustering
+The function `clust_BayesFuseMR()` identifies clusters and computes weighted cluster means, standard errors, and confidence intervals. We can select the number of clusters using the FDR argument which controls the false discovery rate threshold for cluster selection. Here, we set it to 0.4.
 ```{r clust}
-clust_BayesFuseMR(fit, FDR = 0.3)
+clust_BayesFuseMR(fit, FDR = 0.4) %>% 
+  print(n=Inf)
 ```
