@@ -14,7 +14,7 @@ You first need to install the latest release of the **cmdstanr** R
 package with
 
 ``` r
-install.packages("cmdstanr", repos = c("https://stan-dev.r-universe.dev", getOption("repos")))
+install.packages("cmdstanr", repos = c('https://stan-dev.r-universe.dev', getOption("repos")))
 ```
 
 If you don’t already have CmdStan installed then, in addition to
@@ -66,9 +66,13 @@ exposure and outcome with their standard errors, and returns a fitted
 `cmdstanr` object.
 
 ``` r
-fit <- fit_BayesFuseMR(beta_hat_y = dummy_data$beta_hat_y, beta_hat_x = dummy_data$beta_hat_x,
-    sigma_y = dummy_data$sigma_y, sigma_x = dummy_data$sigma_x, snps = paste0("SNP",
-        1:nrow(dummy_data)))
+fit <- fit_BayesFuseMR(
+  beta_hat_y = dummy_data$beta_hat_y,
+  beta_hat_x = dummy_data$beta_hat_x,
+  sigma_y = dummy_data$sigma_y,
+  sigma_x = dummy_data$sigma_x,
+  snps = paste0("SNP", 1:nrow(dummy_data))
+)
 ```
 
     ## Running MCMC with 4 parallel chains...
@@ -81,34 +85,34 @@ fit <- fit_BayesFuseMR(beta_hat_y = dummy_data$beta_hat_y, beta_hat_x = dummy_da
 
     ## Chain 4 Iteration:    1 / 2000 [  0%]  (Warmup)
 
-    ## Chain 2 Iteration:  500 / 2000 [ 25%]  (Warmup) 
+    ## Chain 1 Iteration:  500 / 2000 [ 25%]  (Warmup) 
     ## Chain 3 Iteration:  500 / 2000 [ 25%]  (Warmup) 
     ## Chain 4 Iteration:  500 / 2000 [ 25%]  (Warmup) 
-    ## Chain 1 Iteration:  500 / 2000 [ 25%]  (Warmup) 
-    ## Chain 2 Iteration: 1000 / 2000 [ 50%]  (Warmup) 
-    ## Chain 2 Iteration: 1001 / 2000 [ 50%]  (Sampling) 
+    ## Chain 2 Iteration:  500 / 2000 [ 25%]  (Warmup) 
+    ## Chain 1 Iteration: 1000 / 2000 [ 50%]  (Warmup) 
+    ## Chain 1 Iteration: 1001 / 2000 [ 50%]  (Sampling) 
     ## Chain 3 Iteration: 1000 / 2000 [ 50%]  (Warmup) 
     ## Chain 3 Iteration: 1001 / 2000 [ 50%]  (Sampling) 
     ## Chain 4 Iteration: 1000 / 2000 [ 50%]  (Warmup) 
     ## Chain 4 Iteration: 1001 / 2000 [ 50%]  (Sampling) 
-    ## Chain 1 Iteration: 1000 / 2000 [ 50%]  (Warmup) 
-    ## Chain 1 Iteration: 1001 / 2000 [ 50%]  (Sampling) 
+    ## Chain 2 Iteration: 1000 / 2000 [ 50%]  (Warmup) 
+    ## Chain 2 Iteration: 1001 / 2000 [ 50%]  (Sampling) 
+    ## Chain 1 Iteration: 1500 / 2000 [ 75%]  (Sampling) 
     ## Chain 2 Iteration: 1500 / 2000 [ 75%]  (Sampling) 
     ## Chain 4 Iteration: 1500 / 2000 [ 75%]  (Sampling) 
     ## Chain 3 Iteration: 1500 / 2000 [ 75%]  (Sampling) 
-    ## Chain 1 Iteration: 1500 / 2000 [ 75%]  (Sampling) 
-    ## Chain 2 Iteration: 2000 / 2000 [100%]  (Sampling) 
-    ## Chain 4 Iteration: 2000 / 2000 [100%]  (Sampling) 
-    ## Chain 2 finished in 4.4 seconds.
-    ## Chain 4 finished in 4.4 seconds.
     ## Chain 1 Iteration: 2000 / 2000 [100%]  (Sampling) 
+    ## Chain 1 finished in 4.7 seconds.
+    ## Chain 2 Iteration: 2000 / 2000 [100%]  (Sampling) 
+    ## Chain 2 finished in 4.9 seconds.
+    ## Chain 4 Iteration: 2000 / 2000 [100%]  (Sampling) 
+    ## Chain 4 finished in 5.2 seconds.
     ## Chain 3 Iteration: 2000 / 2000 [100%]  (Sampling) 
-    ## Chain 1 finished in 4.5 seconds.
-    ## Chain 3 finished in 4.4 seconds.
+    ## Chain 3 finished in 5.9 seconds.
     ## 
     ## All 4 chains finished successfully.
-    ## Mean chain execution time: 4.4 seconds.
-    ## Total execution time: 4.6 seconds.
+    ## Mean chain execution time: 5.2 seconds.
+    ## Total execution time: 6.1 seconds.
 
 ### Posterior summaries
 
@@ -123,19 +127,19 @@ head(fit_summary)
 ```
 
     ##     snp variable        mean      median        sd       mad         q5
-    ## 1 SNP23 theta[1] -0.44200066 -0.43902500 0.1135344 0.1113040 -0.6331745
-    ## 2 SNP10 theta[2] -0.33722183 -0.33712200 0.1127035 0.1106516 -0.5217042
-    ## 3 SNP26 theta[3] -0.28910864 -0.29193250 0.1463468 0.1417655 -0.5224859
-    ## 4  SNP6 theta[4] -0.22556145 -0.22294300 0.1583803 0.1516396 -0.4831539
-    ## 5 SNP29 theta[5] -0.14607205 -0.14528000 0.1485054 0.1435918 -0.3917273
-    ## 6 SNP13 theta[6] -0.06556177 -0.06421955 0.1193351 0.1166066 -0.2632553
-    ##           q95     rhat ess_bulk ess_tail
-    ## 1 -0.25971925 1.000226 3814.300 3798.541
-    ## 2 -0.15131970 1.000357 4055.049 3760.828
-    ## 3 -0.04457441 1.000593 3913.688 3406.526
-    ## 4  0.02406007 1.000998 3417.889 3232.759
-    ## 5  0.08739021 1.001012 3875.691 3325.002
-    ## 6  0.12733650 1.000809 4718.847 3781.367
+    ## 1 SNP23 theta[1] -0.44374277 -0.44172900 0.1100599 0.1095604 -0.6276431
+    ## 2 SNP10 theta[2] -0.33805301 -0.33913900 0.1116392 0.1104159 -0.5241826
+    ## 3 SNP26 theta[3] -0.28492620 -0.28706300 0.1456072 0.1405127 -0.5186931
+    ## 4  SNP6 theta[4] -0.22759425 -0.22934800 0.1591705 0.1542756 -0.4865954
+    ## 5 SNP29 theta[5] -0.14778729 -0.14526200 0.1500656 0.1479998 -0.3997963
+    ## 6 SNP13 theta[6] -0.06890449 -0.06804025 0.1187223 0.1189872 -0.2651305
+    ##           q95      rhat ess_bulk ess_tail
+    ## 1 -0.26263985 1.0001693 4113.284 3584.727
+    ## 2 -0.15445800 1.0003834 4315.544 3618.415
+    ## 3 -0.04695237 1.0004753 3973.852 3329.009
+    ## 4  0.03983069 0.9998311 4184.879 3687.291
+    ## 5  0.09428248 1.0007180 4201.765 3223.944
+    ## 6  0.12388585 0.9997957 5477.623 3325.693
 
 The function `clust_BayesFuseMR()` identifies clusters and computes
 weighted cluster means, standard errors, and confidence intervals.
@@ -147,15 +151,15 @@ clust_BayesFuseMR(fit, FDR = 0.3)
     ## # A tibble: 30 × 10
     ##    snp   cluster cluster_size cluster_mean cluster_se cluster_lcl cluster_ucl
     ##    <chr>   <int>        <int>        <dbl>      <dbl>       <dbl>       <dbl>
-    ##  1 SNP23       1            1       -0.442     0.114      -0.665       -0.219
-    ##  2 SNP10       2            3       -0.297     0.0778     -0.449       -0.144
-    ##  3 SNP26       2            3       -0.297     0.0778     -0.449       -0.144
-    ##  4 SNP6        2            3       -0.297     0.0778     -0.449       -0.144
-    ##  5 SNP29       3           20        0.145     0.0257      0.0942       0.195
-    ##  6 SNP13       3           20        0.145     0.0257      0.0942       0.195
-    ##  7 SNP9        3           20        0.145     0.0257      0.0942       0.195
-    ##  8 SNP2        3           20        0.145     0.0257      0.0942       0.195
-    ##  9 SNP12       3           20        0.145     0.0257      0.0942       0.195
-    ## 10 SNP8        3           20        0.145     0.0257      0.0942       0.195
+    ##  1 SNP23       1            1       -0.444     0.110      -0.659       -0.228
+    ##  2 SNP10       2            3       -0.297     0.0774     -0.449       -0.145
+    ##  3 SNP26       2            3       -0.297     0.0774     -0.449       -0.145
+    ##  4 SNP6        2            3       -0.297     0.0774     -0.449       -0.145
+    ##  5 SNP29       3           20        0.142     0.0258      0.0915       0.193
+    ##  6 SNP13       3           20        0.142     0.0258      0.0915       0.193
+    ##  7 SNP9        3           20        0.142     0.0258      0.0915       0.193
+    ##  8 SNP2        3           20        0.142     0.0258      0.0915       0.193
+    ##  9 SNP12       3           20        0.142     0.0258      0.0915       0.193
+    ## 10 SNP8        3           20        0.142     0.0258      0.0915       0.193
     ## # ℹ 20 more rows
     ## # ℹ 3 more variables: theta_mean <dbl>, theta_se <dbl>, theta_pep <dbl>
