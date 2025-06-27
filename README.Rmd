@@ -14,7 +14,7 @@ This repository provides the **BayesFuseMR** R package to implement our Bayesian
 knitr::opts_chunk$set(
   width = 60,
   tidy = TRUE,
-  collapse = TRUE
+  collapse = FALSE
 )
 ```
 
