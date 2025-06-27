@@ -1,8 +1,6 @@
 .Rhistory
 .Rapp.history
 .DS_Store
-Data/
-scripts/BayesFuseMR
 scripts/MR-Horse
 inst/doc
 /doc/
