@@ -178,27 +178,62 @@ theta_BayesFuseMR <- function(D, FDR = NULL, EFD = NULL){
     seed = 123
   )
   
+  results_list <- list()
+    
   if (!is.null(FDR)) {
-    best_fit <- clust_BayesFuseMR(fit, FDR = FDR)
-  } else if (!is.null(EFD)) {
-    best_fit <- clust_BayesFuseMR(fit, EFD = EFD)
-  }
+    # Loop over FDR values
+    for (fdr in FDR) {
+          best_fit <- clust_BayesFuseMR(fit, FDR = fdr)
+            
+          # Find cluster with the most number of SNPs
+          main_cluster <- names(which.max(table(best_fit$cluster)))
+          theta_main <- best_fit %>%
+            distinct(cluster, .keep_all = TRUE) %>%
+            filter(cluster == main_cluster) %>%
+            dplyr::select(cluster_mean, cluster_se) %>%
+            rename(Estimate = cluster_mean, StdError = cluster_se) %>%
+            mutate(Pvalue = 2 * pnorm(abs(Estimate / StdError), lower.tail = FALSE))
 
-  theta_main <- best_fit %>%
-    distinct(cluster, .keep_all = TRUE) %>%
-    dplyr::select(cluster_mean, cluster_se) %>%
-    rename(Estimate = cluster_mean, StdError = cluster_se) %>%
-    mutate(Pvalue = 2 * pnorm(abs(Estimate / StdError), lower.tail = FALSE))
+          ord <- order(as.numeric(substr(fit$snps, 4, 6)))
+
+          res <- cbind(
+            theta_main, 
+            nclust = length(unique(best_fit$cluster)),
+            adj.rand = adjustedRandIndex(best_fit$cluster[ord], D$theta),
+            rand = rand.index(best_fit$cluster[ord], D$theta),
+            FDR = fdr
+          )
+
+          results_list[[as.character(fdr)]] <- res
+        }
+  } else if (!is.null(EFD)) {
+    # Loop over EFD values
+    for (efd in EFD) {
+        best_fit <- clust_BayesFuseMR(fit, EFD = efd)
+
+        # Find cluster with the most number of SNPs
+        main_cluster <- names(which.max(table(best_fit$cluster)))
+        theta_main <- best_fit %>%
+            filter(cluster == main_cluster) %>%
+            dplyr::select(cluster_mean, cluster_se) %>%
+            rename(Estimate = cluster_mean, StdError = cluster_se) %>%
+            mutate(Pvalue = 2 * pnorm(abs(Estimate / StdError), lower.tail = FALSE))
+
+        ord <- order(as.numeric(substr(fit$snps, 4, 6)))
+
+        res <- cbind(
+            theta_main, 
+            nclust = length(unique(best_fit$cluster)),
+            adj.rand = adjustedRandIndex(best_fit$cluster[ord], D$theta),
+            rand = rand.index(best_fit$cluster[ord], D$theta),
+            EFD = efd
+          )
+
+          results_list[[as.character(efd)]] <- res
+        }
+  }
   
-  ord <- order(as.numeric(substr(fit$snps, 4, 6)))
-  
-  return(
-    cbind(
-      theta_main, 
-      nclust = length(unique(best_fit$cluster)),
-      adj.rand = adjustedRandIndex(best_fit$cluster[ord], D$theta),
-      rand = rand.index(best_fit$cluster[ord], D$theta)
-    )
-  )
+  # Combine all results into one data frame
+  return(dplyr::bind_rows(results_list))
 
 }
