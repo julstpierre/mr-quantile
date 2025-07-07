@@ -103,7 +103,7 @@ fit <- fit_BayesFuseMR(
     ## Chain 2 Iteration: 1500 / 2000 [ 75%]  (Sampling) 
     ## Chain 1 Iteration: 1500 / 2000 [ 75%]  (Sampling) 
     ## Chain 3 Iteration: 2000 / 2000 [100%]  (Sampling) 
-    ## Chain 3 finished in 4.7 seconds.
+    ## Chain 3 finished in 4.6 seconds.
     ## Chain 4 Iteration: 2000 / 2000 [100%]  (Sampling) 
     ## Chain 4 finished in 4.7 seconds.
     ## Chain 2 Iteration: 2000 / 2000 [100%]  (Sampling) 

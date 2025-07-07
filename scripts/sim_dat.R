@@ -1,7 +1,7 @@
 library(parallel)
 library(MASS)
 library(dplyr)
-source("functions.R")
+source("utils.R")
 
 #-----------------------------------
 # Define the simulation parameters
@@ -9,201 +9,51 @@ source("functions.R")
 num_jobs <- 6
 num_iters <- 1000
 params <- expand.grid(
-  frac = c(0.3, 0.5, 0.7),
-  scenario = 1:4,
-  theta = c(0, 0.2)
+  p = c(30, 100),
+  beta = c(0, 0.4),
+  h2 = c(0.30),
+  nclust = c(1, 4)
 )
 
 #----------------------------------------------------------------------
-# Theta = 0
+# Simulation scenarios
 #----------------------------------------------------------------------
-RNGkind("L'Ecuyer-CMRG")
 
-# Scenario 1
-# 30% invalid IVs
-set.seed(2024112502)
-D_S1_30_null <- filter(params, scenario == 1, frac == 0.3, theta == 0) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 50% invalid IVs
-set.seed(2024112503)
-D_S1_50_null <- filter(params, scenario == 1, frac == 0.5, theta == 0) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 70% invalid IVs
-set.seed(2024112504)
-D_S1_70_null <- filter(params, scenario == 1, frac == 0.7, theta == 0) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# Scenario 2
-# 30% invalid IVs
-set.seed(2024112506)
-D_S2_30_null <- filter(params, scenario == 2, frac == 0.3, theta == 0) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 50% invalid IVs
-set.seed(2024112507)
-D_S2_50_null <- filter(params, scenario == 2, frac == 0.5, theta == 0) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 70% invalid IVs
-set.seed(2024112508)
-D_S2_70_null <- filter(params, scenario == 2, frac == 0.7, theta == 0) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# Scenario 3
-# 30% invalid IVs
-set.seed(2024112510)
-D_S3_30_null <- filter(params, scenario == 3, frac == 0.3, theta == 0) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 50% invalid IVs
-set.seed(2024112511)
-D_S3_50_null <- filter(params, scenario == 3, frac == 0.5, theta == 0) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 70% invalid IVs
-set.seed(2024112512)
-D_S3_70_null <- filter(params, scenario == 3, frac == 0.7, theta == 0) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# Scenario 4
-# 30% invalid IVs
-set.seed(2024112513)
-D_S4_30_null <- filter(params, scenario == 4, frac == 0.3, theta == 0) %>%
+set.seed(2025070101)
+D_S1_null <- filter(params, beta == 0, nclust == 1, p == 30) %>%
   list() %>%
   replicate(num_iters, .) %>%
   mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
 
-# 50% invalid IVs
-set.seed(2024112514)
-D_S4_50_null <- filter(params, scenario == 4, frac == 0.5, theta == 0) %>%
+set.seed(2025070102)
+D_S1 <- filter(params, beta == 0.4, nclust == 1, p == 30) %>%
+          list() %>%
+          replicate(num_iters, .) %>%
+          mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
+
+set.seed(2025070103)
+D_S2_null <- filter(params, beta == 0, nclust == 1, p == 100) %>%
   list() %>%
   replicate(num_iters, .) %>%
   mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
 
-# 70% invalid IVs
-set.seed(2024112515)
-D_S4_70_null <- filter(params, scenario == 4, frac == 0.7, theta == 0) %>%
-  list() %>%
-  replicate(num_iters, .) %>%
-  mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
+set.seed(2025070104)
+D_S2 <- filter(params, beta == 0.4, nclust == 1, p == 100) %>%
+          list() %>%
+          replicate(num_iters, .) %>%
+          mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
 
+set.seed(2025070105)
+D_S3 <- filter(params, beta == 0.4, nclust == 4, p == 30) %>%
+          list() %>%
+          replicate(num_iters, .) %>%
+          mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
 
-save(D_S1_30_null, D_S1_50_null, D_S1_70_null,
-     D_S2_30_null, D_S2_50_null, D_S2_70_null, 
-     D_S3_30_null, D_S3_50_null, D_S3_70_null, 
-     D_S4_30_null, D_S4_50_null, D_S4_70_null, file = 'Data/sim_dat_null.R')
-
-#----------------------------------------------------------------------
-# Theta = 0.2
-#----------------------------------------------------------------------
-# Scenario 1
-# 30% invalid IVs
-set.seed(2024112514)
-D_S1_30 <- filter(params, scenario == 1, frac == 0.3, theta == 0.2) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 50% invalid IVs
-set.seed(2024112515)
-D_S1_50 <- filter(params, scenario == 1, frac == 0.5, theta == 0.2) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 70% invalid IVs
-set.seed(2024112516)
-D_S1_70 <- filter(params, scenario == 1, frac == 0.7, theta == 0.2) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# Scenario 2
-# 30% invalid IVs
-set.seed(2024112518)
-D_S2_30 <- filter(params, scenario == 2, frac == 0.3, theta == 0.2) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 50% invalid IVs
-set.seed(2024112519)
-D_S2_50 <- filter(params, scenario == 2, frac == 0.5, theta == 0.2) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 70% invalid IVs
-set.seed(2024112520)
-D_S2_70 <- filter(params, scenario == 2, frac == 0.7, theta == 0.2) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# Scenario 3
-# 30% invalid IVs
-set.seed(2024112522)
-D_S3_30 <- filter(params, scenario == 3, frac == 0.3, theta == 0.2) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 50% invalid IVs
-set.seed(2024112523)
-D_S3_50 <- filter(params, scenario == 3, frac == 0.5, theta == 0.2) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 70% invalid IVs
-set.seed(2024112524)
-D_S3_70 <- filter(params, scenario == 3, frac == 0.7, theta == 0.2) %>%
-                list() %>%
-                replicate(num_iters, .) %>%
-                mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# Scenario 4
-# 30% invalid IVs
-set.seed(2024112525)
-D_S4_30 <- filter(params, scenario == 4, frac == 0.3, theta == 0.2) %>%
-  list() %>%
-  replicate(num_iters, .) %>%
-  mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 50% invalid IVs
-set.seed(2024112526)
-D_S4_50 <- filter(params, scenario == 4, frac == 0.5, theta == 0.2) %>%
-  list() %>%
-  replicate(num_iters, .) %>%
-  mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# 70% invalid IVs
-set.seed(2024112527)
-D_S4_70 <- filter(params, scenario == 4, frac == 0.7, theta == 0.2) %>%
-  list() %>%
-  replicate(num_iters, .) %>%
-  mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
+set.seed(2025070106)
+D_S4 <- filter(params, beta == 0.4, nclust == 4, p == 100) %>%
+          list() %>%
+          replicate(num_iters, .) %>%
+          mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
 
 # Save simulated data
-save(D_S1_30, D_S1_50, D_S1_70, D_S2_30, D_S2_50, D_S2_70,
-     D_S3_30, D_S3_50, D_S3_70, D_S4_30, D_S4_50, D_S4_70, file = 'Data/sim_dat.R')
+save(D_S1, D_S1_null, D_S2, D_S2_null, D_S3, D_S4, file = '../data/simulations/sim_dat.R')

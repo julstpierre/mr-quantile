@@ -5,135 +5,66 @@ library(glmnet)
 library(MendelianRandomization)
 library(MASS)
 library(parallel)
-library(hqreg)
-source("functions.R")
+library(mrclust)
+library(genlasso)
+library(BayesFuseMR)
+library(fossil)
+library(mclust)
+source("utils.R")
 
 # # Load data
-load("Data/sim_dat_null.R")
-load("Data/sim_dat.R")
+load("../data/simulations/sim_dat.R")
 
 #--------------------------------------------------------------------------------
 # Scenario 1
 #--------------------------------------------------------------------------------
-# 30% invalid IVs
-res_S1_30_null_ivw <- mclapply(D_S1_30_null, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S1_30_null_egger <- mclapply(D_S1_30_null, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S1_30_null_median <- mclapply(D_S1_30_null, theta_median) %>% do.call(rbind, .)
-res_S1_30_null_lasso <- mclapply(D_S1_30_null, theta_lasso) %>% do.call(rbind.data.frame, .)
+res_S1_null_ivw <- mclapply(D_S1_null, theta_ivw) %>% do.call(rbind.data.frame, .)
+res_S1_null_egger <- mclapply(D_S1_null, theta_egger) %>% do.call(rbind.data.frame, .)
+res_S1_null_median <- mclapply(D_S1_null, theta_median) %>% do.call(rbind, .)
+res_S1_null_mrclust <- mclapply(D_S1_null, theta_mrclust) %>% do.call(rbind.data.frame, .)
+res_S1_null_fused_lasso <- mclapply(D_S1_null, theta_fused_lasso) %>% do.call(rbind, .)
+res_S1_null_BayesFuseMR <- mclapply(D_S1_null, theta_BayesFuseMR, FDR = 0.05) %>% do.call(rbind, .)
 
-res_S1_30_ivw <- mclapply(D_S1_30, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S1_30_egger <- mclapply(D_S1_30, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S1_30_median <- mclapply(D_S1_30, theta_median) %>% do.call(rbind, .)
-res_S1_30_lasso <- mclapply(D_S1_30, theta_lasso) %>% do.call(rbind.data.frame, .)
-
-# 50% invalid IVs
-res_S1_50_null_ivw <- mclapply(D_S1_50_null, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S1_50_null_egger <- mclapply(D_S1_50_null, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S1_50_null_median <- mclapply(D_S1_50_null, theta_median) %>% do.call(rbind, .)
-res_S1_50_null_lasso <- mclapply(D_S1_50_null, theta_lasso) %>% do.call(rbind.data.frame, .)
-
-res_S1_50_ivw <- mclapply(D_S1_50, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S1_50_egger <- mclapply(D_S1_50, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S1_50_median <- mclapply(D_S1_50, theta_median) %>% do.call(rbind, .)
-res_S1_50_lasso <- mclapply(D_S1_50, theta_lasso) %>% do.call(rbind.data.frame, .)
-
-# 70% invalid IVs
-res_S1_70_null_ivw <- mclapply(D_S1_70_null, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S1_70_null_egger <- mclapply(D_S1_70_null, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S1_70_null_median <- mclapply(D_S1_70_null, theta_median) %>% do.call(rbind, .)
-res_S1_70_null_lasso <- mclapply(D_S1_70_null, theta_lasso) %>% do.call(rbind.data.frame, .)
-
-res_S1_70_ivw <- mclapply(D_S1_70, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S1_70_egger <- mclapply(D_S1_70, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S1_70_median <- mclapply(D_S1_70, theta_median) %>% do.call(rbind, .)
-res_S1_70_lasso <- mclapply(D_S1_70, theta_lasso) %>% do.call(rbind.data.frame, .)
+res_S1_ivw <- mclapply(D_S1, theta_ivw) %>% do.call(rbind.data.frame, .)
+res_S1_egger <- mclapply(D_S1, theta_egger) %>% do.call(rbind.data.frame, .)
+res_S1_median <- mclapply(D_S1, theta_median) %>% do.call(rbind, .)
+res_S1_mrclust <- mclapply(D_S1, theta_mrclust) %>% do.call(rbind.data.frame, .)
+res_S1_fused_lasso <- mclapply(D_S1, theta_fused_lasso) %>% do.call(rbind, .)
+res_S1_BayesFuseMR <- mclapply(D_S1, theta_BayesFuseMR, FDR = 0.05) %>% do.call(rbind, .)
 
 #--------------------------------------------------------------------------------
 # Scenario 2
 #--------------------------------------------------------------------------------
-# 30% invalid IVs
-res_S2_30_null_ivw <- mclapply(D_S2_30_null, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S2_30_null_egger <- mclapply(D_S2_30_null, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S2_30_null_median <- mclapply(D_S2_30_null, theta_median) %>% do.call(rbind, .)
-res_S2_30_null_lasso <- mclapply(D_S2_30_null, theta_lasso) %>% do.call(rbind.data.frame, .)
+res_S2_null_ivw <- mclapply(D_S2_null, theta_ivw) %>% do.call(rbind.data.frame, .)
+res_S2_null_egger <- mclapply(D_S2_null, theta_egger) %>% do.call(rbind.data.frame, .)
+res_S2_null_median <- mclapply(D_S2_null, theta_median) %>% do.call(rbind, .)
+res_S2_null_mrclust <- mclapply(D_S2_null, theta_mrclust) %>% do.call(rbind.data.frame, .)
+res_S2_null_fused_lasso <- mclapply(D_S2_null, theta_fused_lasso) %>% do.call(rbind, .)
+res_S2_null_BayesFuseMR <- mclapply(D_S2_null, theta_BayesFuseMR, FDR = 0.05) %>% do.call(rbind, .)
 
-res_S2_30_ivw <- mclapply(D_S2_30, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S2_30_egger <- mclapply(D_S2_30, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S2_30_median <- mclapply(D_S2_30, theta_median) %>% do.call(rbind, .)
-res_S2_30_lasso <- mclapply(D_S2_30, theta_lasso) %>% do.call(rbind.data.frame, .)
-
-# 50% invalid IVs
-res_S2_50_null_ivw <- mclapply(D_S2_50_null, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S2_50_null_egger <- mclapply(D_S2_50_null, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S2_50_null_median <- mclapply(D_S2_50_null, theta_median) %>% do.call(rbind, .)
-res_S2_50_null_lasso <- mclapply(D_S2_50_null, theta_lasso) %>% do.call(rbind.data.frame, .)
-
-res_S2_50_ivw <- mclapply(D_S2_50, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S2_50_egger <- mclapply(D_S2_50, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S2_50_median <- mclapply(D_S2_50, theta_median) %>% do.call(rbind, .)
-res_S2_50_lasso <- mclapply(D_S2_50, theta_lasso) %>% do.call(rbind.data.frame, .)
-
-# 70% invalid IVs
-res_S2_70_null_ivw <- mclapply(D_S2_70_null, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S2_70_null_egger <- mclapply(D_S2_70_null, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S2_70_null_median <- mclapply(D_S2_70_null, theta_median) %>% do.call(rbind, .)
-res_S2_70_null_lasso <- mclapply(D_S2_70_null, theta_lasso) %>% do.call(rbind.data.frame, .)
-
-res_S2_70_ivw <- mclapply(D_S2_70, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S2_70_egger <- mclapply(D_S2_70, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S2_70_median <- mclapply(D_S2_70, theta_median) %>% do.call(rbind, .)
-res_S2_70_lasso <- mclapply(D_S2_70, theta_lasso) %>% do.call(rbind.data.frame, .)
+res_S2_ivw <- mclapply(D_S2, theta_ivw) %>% do.call(rbind.data.frame, .)
+res_S2_egger <- mclapply(D_S2, theta_egger) %>% do.call(rbind.data.frame, .)
+res_S2_median <- mclapply(D_S2, theta_median) %>% do.call(rbind, .)
+res_S2_mrclust <- mclapply(D_S2, theta_mrclust) %>% do.call(rbind.data.frame, .)
+res_S2_fused_lasso <- mclapply(D_S2, theta_fused_lasso) %>% do.call(rbind, .)
+res_S2_BayesFuseMR <- mclapply(D_S2, theta_BayesFuseMR, FDR = 0.05) %>% do.call(rbind, .)
 
 #--------------------------------------------------------------------------------
 # Scenario 3
 #--------------------------------------------------------------------------------
-# 30% invalid IVs
-res_S3_30_null_ivw <- mclapply(D_S3_30_null, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S3_30_null_egger <- mclapply(D_S3_30_null, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S3_30_null_median <- mclapply(D_S3_30_null, theta_median) %>% do.call(rbind, .)
-res_S3_30_null_lasso <- mclapply(D_S3_30_null, theta_lasso) %>% do.call(rbind.data.frame, .)
+res_S3_ivw <- mclapply(D_S3, theta_ivw) %>% do.call(rbind.data.frame, .)
+res_S3_egger <- mclapply(D_S3, theta_egger) %>% do.call(rbind.data.frame, .)
+res_S3_median <- mclapply(D_S3, theta_median) %>% do.call(rbind, .)
+res_S3_mrclust <- mclapply(D_S3, theta_mrclust) %>% do.call(rbind, .)
+res_S3_fused_lasso <- mclapply(D_S3, theta_fused_lasso) %>% do.call(rbind, .)
+res_S3_BayesFuseMR <- mclapply(D_S3, theta_BayesFuseMR, FDR = 0.05) %>% do.call(rbind, .)
 
-res_S3_30_ivw <- mclapply(D_S3_30, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S3_30_egger <- mclapply(D_S3_30, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S3_30_median <- mclapply(D_S3_30, theta_median) %>% do.call(rbind, .)
-res_S3_30_lasso <- mclapply(D_S3_30, theta_lasso) %>% do.call(rbind.data.frame, .)
-
-# 50% invalid IVs
-res_S3_50_null_ivw <- mclapply(D_S3_50_null, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S3_50_null_egger <- mclapply(D_S3_50_null, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S3_50_null_median <- mclapply(D_S3_50_null, theta_median) %>% do.call(rbind, .)
-res_S3_50_null_lasso <- mclapply(D_S3_50_null, theta_lasso) %>% do.call(rbind.data.frame, .)
-
-res_S3_50_ivw <- mclapply(D_S3_50, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S3_50_egger <- mclapply(D_S3_50, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S3_50_median <- mclapply(D_S3_50, theta_median) %>% do.call(rbind, .)
-res_S3_50_lasso <- mclapply(D_S3_50, theta_lasso) %>% do.call(rbind.data.frame, .)
-
-# 70% invalid IVs
-res_S3_70_null_ivw <- mclapply(D_S3_70_null, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S3_70_null_egger <- mclapply(D_S3_70_null, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S3_70_null_median <- mclapply(D_S3_70_null, theta_median) %>% do.call(rbind, .)
-res_S3_70_null_lasso <- mclapply(D_S3_70_null, theta_lasso) %>% do.call(rbind.data.frame, .)
-
-res_S3_70_ivw <- mclapply(D_S3_70, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_S3_70_egger <- mclapply(D_S3_70, theta_egger) %>% do.call(rbind.data.frame, .)
-res_S3_70_median <- mclapply(D_S3_70, theta_median) %>% do.call(rbind, .)
-res_S3_70_lasso <- mclapply(D_S3_70, theta_lasso) %>% do.call(rbind.data.frame, .)
-
-#--------------------------------------------------------------------------------  
-# Variable selection
 #--------------------------------------------------------------------------------
-# # Save results for selection of IVs
-# lasso.IVs <- lasso.path.IVs[[lam_pos]]
-# 
-# # (a) The proportion of instruments selected as invalid which were truly invalid;
-# precision <- length(intersect(setdiff(1:p, lasso.IVs), invalid.IVs)) / length(setdiff(1:p, lasso.IVs))
-#   
-# # (b) The proportion of instruments selected as valid which were truly valid;
-# npv <- length(intersect(lasso.IVs, valid.IVs)) / length(lasso.IVs)
-# 
-# # (c) The proportion of truly invalid instruments which were selected as invalid;
-# tpr <- length(intersect(setdiff(1:p, lasso.IVs), invalid.IVs)) / length(invalid.IVs)
-# 
-# # (d) The proportion of truly valid instruments which were estimated as valid.
-# specificity <- length(intersect(lasso.IVs, valid.IVs)) / length(valid.IVs)
+# Scenario 4
+#--------------------------------------------------------------------------------
+res_S4_ivw <- mclapply(D_S4, theta_ivw) %>% do.call(rbind.data.frame, .)
+res_S4_egger <- mclapply(D_S4, theta_egger) %>% do.call(rbind.data.frame, .)
+res_S4_median <- mclapply(D_S4, theta_median) %>% do.call(rbind, .)
+res_S4_mrclust <- mclapply(D_S4, theta_mrclust) %>% do.call(rbind, .)
+res_S4_fused_lasso <- mclapply(D_S4, theta_fused_lasso) %>% do.call(rbind, .)
+res_S4_BayesFuseMR <- mclapply(D_S4, theta_BayesFuseMR, FDR = 0.05) %>% do.call(rbind, .)

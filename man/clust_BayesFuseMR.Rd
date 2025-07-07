@@ -4,12 +4,14 @@
 \alias{clust_BayesFuseMR}
 \title{Summarize clusters from BayesFuseMR posterior samples}
 \usage{
-clust_BayesFuseMR(fit, FDR = 0.3)
+clust_BayesFuseMR(fit, FDR = 0.05, EFD = NULL)
 }
 \arguments{
 \item{fit}{A fitted \code{cmdstanr} model object returned by \code{fit_BayesFuseMR}.}
 
-\item{FDR}{Numeric scalar. False discovery rate threshold for identifying significant breaks (default 0.3).}
+\item{FDR}{Numeric scalar. False discovery rate threshold for identifying significant breaks (default 0.05).}
+
+\item{EFD}{Numeric scalar. Expected number of false discoveries. If provided, overrides \code{FDR}.}
 }
 \value{
 A data frame with one row per instrument containing:
