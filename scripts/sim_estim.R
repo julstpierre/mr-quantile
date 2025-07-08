@@ -69,7 +69,7 @@ res_all <- bind_rows(
 # -----------------------------
 # Save results
 # -----------------------------
-out_dir <- "../results"
+out_dir <- "../results/rds"
 out_file <- paste0(scenario_name, "_chunk_", start_idx, "_to_", end_idx, ".rds")
 out_path <- file.path(out_dir, out_file)
 saveRDS(res_all, out_path)
