@@ -11,7 +11,7 @@ library(BayesFuseMR)
 library(fossil)
 library(mclust)
 
-# Load custom estimator functions (you should define these in utils.R)
+# Load custom estimator functions
 source("utils.R")
 
 # -----------------------------

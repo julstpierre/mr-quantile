@@ -26,13 +26,23 @@
 #' @importFrom posterior quantile2
 #' @export
 clust_BayesFuseMR <- function(fit, FDR = 0.05, EFD = NULL) {
-
-  # Posterior summary statistics
-  breaks <-
-    fit$posterior$summary(variables = "eta", "mean", 
-                pep = ~ 2 * pmin(mean(. < 0), mean(. > 0)),
-                extra_quantiles = ~posterior::quantile2(., probs = c(.025, .975))
-                ) %>%
+  
+  # Order theta by posterior means and define delta as their successive differences
+  theta_samples <- fit$posterior$draws(variables = "theta", format = "draws_matrix") %>%
+                      t()
+  
+  breaks <- t(apply(theta_samples[order(rowMeans(theta_samples)), ], 2, diff)) %>%
+    as.data.frame() %>%
+    setNames(paste0("delta[", seq_len(ncol(.)), "]")) %>%
+    purrr::map_dfr(~{
+      tibble(
+        mean  = mean(.x),
+        se    = sd(.x),
+        pep   = 2 * min(mean(.x < 0), mean(.x > 0)),
+        q025  = quantile(.x, 0.025),
+        q975  = quantile(.x, 0.975)
+      )
+    }, .id = "variable") %>%
     arrange(pep) %>%
     mutate(qvalue = cummean(pep), qvalue2 = row_number() * qvalue) 
   
@@ -42,18 +52,25 @@ clust_BayesFuseMR <- function(fit, FDR = 0.05, EFD = NULL) {
     breaks <- filter(breaks, qvalue < FDR)
   }
   
-  # Extract index of significant breaks from variable names like "eta[5]"
+  # Extract index of significant breaks from variable names
   break_indices <- breaks %>%
-    mutate(index = as.integer(gsub("eta\\[(\\d+)\\]", "\\1", variable))) %>%
+    mutate(index = as.integer(gsub("delta\\[(\\d+)\\]", "\\1", variable))) %>%
     arrange(index) %>%
     pull(index)
   
   # Assign cluster IDs
-  theta_df <- fit$posterior$summary(variables = "theta", "mean", "sd") %>%
-    rename(theta_mean = mean, theta_se = sd) %>%
+  theta_df <- fit$posterior$summary(variables = "theta", mean, sd) %>%
     mutate(snp = fit$snps) %>%
-    mutate(cluster = cut(row_number(), breaks = c(0, break_indices, max(row_number())), labels = FALSE, right = TRUE)) %>%
-    dplyr::select(snp, theta_mean, theta_se, cluster)
+    mutate(index = as.integer(gsub("theta\\[(\\d+)\\]", "\\1", variable))) %>%
+    slice(order(rowMeans(theta_samples))) %>%
+    rename(theta_mean = mean, theta_se = sd) %>%
+    mutate(cluster = cut(
+      row_number(),
+      breaks = c(0, break_indices, n()),  # breakpoints define cluster boundaries
+      labels = FALSE,
+      right = TRUE
+    )) %>%
+    select(snp, theta_mean, theta_se, cluster)
   
   # Compute cluster summary statistics
   theta_summary <-
