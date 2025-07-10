@@ -39,8 +39,8 @@ clust_BayesFuseMR <- function(fit, FDR = 0.05, EFD = NULL) {
         mean  = mean(.x),
         se    = sd(.x),
         pep   = 2 * min(mean(.x < 0), mean(.x > 0)),
-        q025  = quantile(.x, 0.025),
-        q975  = quantile(.x, 0.975)
+        q25  = quantile(.x, 0.25),
+        q75  = quantile(.x, 0.75)
       )
     }, .id = "variable") %>%
     arrange(pep) %>%

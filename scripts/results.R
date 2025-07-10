@@ -13,8 +13,8 @@ library(ggplot2)
 # -----------------------------
 # Parameters
 # -----------------------------
-results_dir <- "/lustre06/project/6095322/gf591137/BayesFuseMR/results/rds"
-plot_dir <- "/lustre06/project/6095322/gf591137/BayesFuseMR/results/plots"
+results_dir <- "../results/rds"
+plot_dir <- "../results/plots"
 scenario_prefix <- "D_S"
 
 if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
@@ -61,7 +61,7 @@ summary_stats <- all_results %>%
     .groups = "drop"
   )
 
-filter(summary_stats, scenario == "D_S3") %>%
+filter(summary_stats, scenario == "D_S2") %>%
     print(width = Inf)
 
 write_csv(summary_stats, file.path(results_dir, "summary_stats.csv"))

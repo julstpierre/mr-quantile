@@ -6,8 +6,8 @@ sim_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(beta = 0.2, nclust = 4, p = 30, h2 = 0.30)
-  n <- 10000
+  # args <- list(beta = 0.4, nclust = 4, p = 30, h2 = 0.30)
+  n <- 50000
   beta <- args$beta
   nclust <- args$nclust
   p <- args$p
@@ -115,9 +115,12 @@ theta_mrclust <- function(D){
 #--------------------------------------------------------------------------------
 # Fit generalized fused lasso on simulated data
 #--------------------------------------------------------------------------------
-theta_fused_lasso <- function(D, k=1, cutoff=0.2){
+theta_fused_lasso <- function(D, k=1){
   
   n <- length(D$beta_hat_y)
+  ratios <- D$beta_hat_y / D$beta_hat_x
+  y <- D$beta_hat_y/sqrt(D$sigma2_y)
+  X <- diag(D$beta_hat_x/sqrt(D$sigma2_y))
   
   # For each pair (i, j), we want a row with 1 at position i, -1 at position j
   pairs <- do.call(rbind, lapply(1:(n - 1), function(i) cbind(i, (i + 1):min(n, i + k))))
@@ -129,36 +132,62 @@ theta_fused_lasso <- function(D, k=1, cutoff=0.2){
     dims = c(m, n)
   ) %>% as.matrix()
   
-  # Calculate ratios and reorder IVs
-  ratios <- D$beta_hat_y / D$beta_hat_x
-  ratios.se <- sqrt(D$sigma2_y) / abs(D$beta_hat_x)
-  ord <- order(ratios/ratios.se)
-  scaled.ratios <- (ratios/ratios.se)[ord]
-  scaled.X <- diag(1/ratios.se[ord])
+  # Apply a l2 regularization to the ratios
+  lambda_list <- seq(0, 3, 0.1)
+  results <- vector("list", length(lambda_list))
   
-  # Fit fused lasso using the genlasso package
-  genlasso.fit <- genlasso(scaled.ratios, X = scaled.X, D = Dmat)
+  for (i in seq_along(lambda_list)) {
+      lambda <- lambda_list[i]
+      ytilde <- c(y, rep(0, n))
+      Xtilde <- rbind(X, sqrt(lambda) * diag(n))
+      ridge.ratios <- lm(ytilde ~ -1 + Xtilde)$coefficients %>% as.vector()
+      
+      # Order data by regularized ratios
+      ord <- order(ridge.ratios)
+      ytilde <- c(y[ord], rep(0, n))
+      Xtilde <- rbind(X[ord, ord], sqrt(lambda) * diag(n))
+      
+      # Compute adaptive weights using differences in ratios
+      gamma   <- 2     # can tune
+      eps     <- 0    # stability constant
+      diffs   <- abs(diff(ridge.ratios[ord]))
+      weights <- 1 / (diffs^gamma + eps)
+      
+      # Fit model
+      genlasso.fit <- genlasso(ytilde, Xtilde, D = diag(weights) %*% Dmat)
+      
+      # Compute EBIC for each lambda
+      rss <- colSums((genlasso.fit$fit[1:n, ] - ytilde[1:n])^2)
+      df <- genlasso.fit$df  # effective degrees of freedom
+      ebic <- function(gamma) {
+        rss / n + log(n) * df / n + 2 * 1 * log(choose(D$p-1, df-1)) / n
+      }
+      
+      # Return best fit
+      results[[i]] <- list(
+        lambda = lambda,
+        theta_hat = round(genlasso.fit$beta[, which.min(ebic(1))], 4),
+        ebic = min(ebic(1)),
+        ord = ord
+      )
+  }
   
-  # Compute BIC for each lambda
-  rss <- colSums((genlasso.fit$fit - scaled.ratios)^2)
-  df <- genlasso.fit$df  # effective degrees of freedom
-  bic <- rss / n + log(n) * df / n
-  best_fit <- genlasso.fit$beta[, which.min(bic)]
-  
-  # Hard thresholding
-  theta <- round(best_fit / cutoff) * cutoff
+  # Select best model
+  best_fit <- results[[which.min(sapply(results, function(x) x$ebic))]]
+  best_fit$lambda
+  table(best_fit$theta_hat)
   
   # Find cluster with the most number of SNPs
-  main_cluster <- names(which.max(table(theta)))
-  snps <- ord[theta == main_cluster]
+  main_cluster <- names(which.max(table(best_fit$theta_hat)))
+  snps <- ord[best_fit$theta_hat == main_cluster]
   
   # Fit IVW on main cluster
   return(
     cbind(
       theta_ivw(D, snps), 
-      nclust = length(unique(theta)),
-      adj.rand = adjustedRandIndex(theta, D$theta[ord]),
-      rand = rand.index(theta, D$theta[ord])
+      nclust = length(unique(best_fit$theta_hat)),
+      adj.rand = adjustedRandIndex(best_fit$theta_hat, D$theta[best_fit$ord]),
+      rand = rand.index(best_fit$theta_hat, D$theta[best_fit$ord])
     )
   )
   
