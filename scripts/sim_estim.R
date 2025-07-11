@@ -58,12 +58,12 @@ tag_method <- function(res_list, method) {
 }
 
 res_all <- bind_rows(
-  tag_method(res_ivw, "ivw"),
-  tag_method(res_egger, "egger"),
-  tag_method(res_median, "median"),
-  tag_method(res_mrclust, "mrclust"),
-  tag_method(res_fused_lasso, "fused_lasso"),
-  tag_method(res_bayesfusemr, "bayesfusemr")
+  tag_method(res_ivw, "ivw")
+  ,tag_method(res_egger, "egger")
+  ,tag_method(res_median, "median")
+  ,tag_method(res_mrclust, "mrclust")
+  ,tag_method(res_fused_lasso, "fused_lasso")
+  ,tag_method(res_bayesfusemr, "bayesfusemr")
 )
 
 # -----------------------------
