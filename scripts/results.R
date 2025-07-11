@@ -61,7 +61,7 @@ summary_stats <- all_results %>%
     .groups = "drop"
   )
 
-filter(summary_stats, scenario == "D_S2") %>%
+filter(summary_stats, scenario == "D_S3") %>%
     print(width = Inf)
 
 write_csv(summary_stats, file.path(results_dir, "summary_stats.csv"))

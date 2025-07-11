@@ -115,7 +115,7 @@ theta_mrclust <- function(D){
 #--------------------------------------------------------------------------------
 # Fit generalized fused lasso on simulated data
 #--------------------------------------------------------------------------------
-theta_fused_lasso <- function(D, k=1){
+theta_fused_lasso <- function(D, k = 1, gamma = 2){
   
   n <- length(D$beta_hat_y)
   ratios <- D$beta_hat_y / D$beta_hat_x
@@ -148,9 +148,9 @@ theta_fused_lasso <- function(D, k=1){
       Xtilde <- rbind(X[ord, ord], sqrt(lambda) * diag(n))
       
       # Compute adaptive weights using differences in ratios
-      gamma   <- 2     # can tune
+      # gamma <- 2
       eps     <- 0    # stability constant
-      diffs   <- abs(diff(ridge.ratios[ord]))
+      diffs   <- sweep(Dmat, 2, ridge.ratios[ord], `*`) %>% rowSums() %>% abs()
       weights <- 1 / (diffs^gamma + eps)
       
       # Fit model
@@ -159,15 +159,15 @@ theta_fused_lasso <- function(D, k=1){
       # Compute EBIC for each lambda
       rss <- colSums((genlasso.fit$fit[1:n, ] - ytilde[1:n])^2)
       df <- genlasso.fit$df  # effective degrees of freedom
-      ebic <- function(gamma) {
-        rss / n + log(n) * df / n + 2 * 1 * log(choose(D$p-1, df-1)) / n
+      ebic <- function(gam) {
+        rss / n + log(n) * df / n + 2 * gam * log(choose(D$p-1, df-1)) / n
       }
-      
+        
       # Return best fit
       results[[i]] <- list(
         lambda = lambda,
-        theta_hat = round(genlasso.fit$beta[, which.min(ebic(1))], 4),
-        ebic = min(ebic(1)),
+        theta_hat = round(genlasso.fit$beta[, which.min(ebic(3))], 4),
+        ebic = min(ebic(3)),
         ord = ord
       )
   }
