@@ -166,8 +166,8 @@ theta_fused_lasso <- function(D, k = 1, gamma = 2){
       # Return best fit
       results[[i]] <- list(
         lambda = lambda,
-        theta_hat = round(genlasso.fit$beta[, which.min(ebic(3))], 4),
-        ebic = min(ebic(3)),
+        theta_hat = round(genlasso.fit$beta[, which.min(ebic(2))], 4),
+        ebic = min(ebic(2)),
         ord = ord
       )
   }
