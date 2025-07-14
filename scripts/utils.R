@@ -6,8 +6,8 @@ sim_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(beta = 0.4, nclust = 4, p = 30, h2 = 0.30)
-  n <- 50000
+  # args <- list(beta = 0.4, nclust = 4, p = 30, h2 = 0.30, n = 50000)
+  n <- args$n
   beta <- args$beta
   nclust <- args$nclust
   p <- args$p
@@ -89,10 +89,12 @@ theta_mrclust <- function(D){
                           by = D$beta_hat_y, 
                           bxse = sqrt(D$sigma2_x), 
                           byse = sqrt(D$sigma2_y),
-                          obs_names = paste0("SNP", 1:D$p)
+                          obs_names = paste0("SNP", 1:D$p),
+                          cluster_membership = list(by_prob = 0.8, bound = 0)
                          )
     
     res_em_best <- res_em$results$best
+    table(res_em_best$cluster_mean)
     
     # Find cluster with the most number of SNPs
     main_cluster <- names(which.max(table(res_em_best$cluster)))
@@ -107,17 +109,44 @@ theta_mrclust <- function(D){
            theta_ivw(D, snps), 
            nclust = length(unique(res_em_best$cluster)),
            adj.rand = adjustedRandIndex(res_em_best$cluster, D$theta),
-           rand = rand.index(res_em_best$cluster, D$theta)
+           rand = rand.index(res_em_best$cluster, D$theta),
+           rmse = sqrt(mean((res_em_best$cluster_mean - D$theta)^2)),
+           mae = mean(abs(res_em_best$cluster_mean - D$theta))
            )
       )
 }
 
 #--------------------------------------------------------------------------------
+# Fit MClust on simulated data
+#--------------------------------------------------------------------------------
+theta_Mclust <- function(D){
+  ratios <- D$beta_hat_y / D$beta_hat_x
+  res_em <- Mclust(ratios)
+  
+  # Find cluster with the most number of SNPs
+  main_cluster <- names(which.max(table(res_em$classification)))
+  snps <- which(res_em$classification == main_cluster)
+  
+  # Fit IVW on main cluster
+  return(
+    cbind(
+      theta_ivw(D, snps), 
+      nclust = length(unique(res_em$classification)),
+      adj.rand = adjustedRandIndex(res_em$classification, D$theta),
+      rand = rand.index(res_em$classification, D$theta),
+      rmse = sqrt(mean((res_em$parameters$mean[res_em$classification] - D$theta)^2)),
+      mae = mean(abs(res_em$parameters$mean[res_em$classification] - D$theta))
+    )
+  )
+}
+
+#--------------------------------------------------------------------------------
 # Fit generalized fused lasso on simulated data
 #--------------------------------------------------------------------------------
-theta_fused_lasso <- function(D, k = 1, gamma = 2){
+theta_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 3, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
   
   n <- length(D$beta_hat_y)
+  if (is.null(max_clusters)) { max_clusters <- n/2 }
   ratios <- D$beta_hat_y / D$beta_hat_x
   y <- D$beta_hat_y/sqrt(D$sigma2_y)
   X <- diag(D$beta_hat_x/sqrt(D$sigma2_y))
@@ -133,7 +162,7 @@ theta_fused_lasso <- function(D, k = 1, gamma = 2){
   ) %>% as.matrix()
   
   # Apply a l2 regularization to the ratios
-  lambda_list <- seq(0, 3, 0.1)
+  if (is.null(lambda_list)) { lambda_list <- seq(0, 3, 0.1) }
   results <- vector("list", length(lambda_list))
   
   for (i in seq_along(lambda_list)) {
@@ -148,7 +177,6 @@ theta_fused_lasso <- function(D, k = 1, gamma = 2){
       Xtilde <- rbind(X[ord, ord], sqrt(lambda) * diag(n))
       
       # Compute adaptive weights using differences in ratios
-      # gamma <- 2
       eps     <- 0    # stability constant
       diffs   <- sweep(Dmat, 2, ridge.ratios[ord], `*`) %>% rowSums() %>% abs()
       weights <- 1 / (diffs^gamma + eps)
@@ -159,16 +187,15 @@ theta_fused_lasso <- function(D, k = 1, gamma = 2){
       # Compute EBIC for each lambda
       rss <- colSums((genlasso.fit$fit[1:n, ] - ytilde[1:n])^2)
       df <- genlasso.fit$df  # effective degrees of freedom
-      ebic <- function(gam) {
-        rss / n + log(n) * df / n + 2 * gam * log(choose(D$p-1, df-1)) / n
-      }
+      ebic <- rss / n + log(n) * df / n + 2 * ebic_coef * log(choose(n-1, df-1)) / n
         
       # Return best fit
       results[[i]] <- list(
         lambda = lambda,
-        theta_hat = round(genlasso.fit$beta[, which.min(ebic(2))], 4),
-        ebic = min(ebic(2)),
-        ord = ord
+        theta_hat = round(genlasso.fit$beta[, which.min(ebic[df < max_clusters])], 4),
+        ebic = min(ebic[df < max_clusters]),
+        ord = ord,
+        ratios = ridge.ratios
       )
   }
   
@@ -177,17 +204,55 @@ theta_fused_lasso <- function(D, k = 1, gamma = 2){
   best_fit$lambda
   table(best_fit$theta_hat)
   
+  # Assign clusters based on distance criteria
+  if (!is.null(post_hoc)){
+    
+    # Compute distance matrix
+    cluster_means <- sort(unique(best_fit$theta_hat))
+    names(cluster_means) <- cluster_means
+    ratios.se <- sqrt(D$sigma2_y) / abs(D$beta_hat_x)
+    distance_list <- lapply(results, function(res) {
+      sapply(cluster_means, function(mu) {
+        (res$ratios - mu)^2 / ratios.se^2
+      })
+    })
+    
+    # Assign clusters based on minimum distance
+    if (post_hoc == "mean") {
+      cluster <- apply(apply(simplify2array(distance_list), c(1, 2), mean), 1, which.min)
+    } else if (post_hoc == "mode") {
+      cluster <- apply(apply(simplify2array(distance_list), c(1, 3), which.min), 1, get.mode)
+    }
+    names(cluster) <- cluster_means[cluster]
+    theta_hat <- as.numeric(cluster_means[cluster])
+    table(theta_hat)
+    
+  } else {
+    # Assign clusters based on fusion
+    cluster_means <- sort(unique(best_fit$theta_hat))
+    cluster <- match(best_fit$theta_hat[order(best_fit$ord)], cluster_means)
+    names(cluster) <- cluster_means[cluster]
+    theta_hat <- as.numeric(cluster_means[cluster])
+    table(theta_hat)
+  }
+  
   # Find cluster with the most number of SNPs
-  main_cluster <- names(which.max(table(best_fit$theta_hat)))
-  snps <- ord[best_fit$theta_hat == main_cluster]
+  if ("3" %in% which(table(cluster) == max(table(cluster)))) {
+    main_cluster <- 3
+  } else {
+    main_cluster <- table(cluster) |> which.max()
+  }
+  snps <- which(cluster == main_cluster)
   
   # Fit IVW on main cluster
   return(
     cbind(
       theta_ivw(D, snps), 
-      nclust = length(unique(best_fit$theta_hat)),
-      adj.rand = adjustedRandIndex(best_fit$theta_hat, D$theta[best_fit$ord]),
-      rand = rand.index(best_fit$theta_hat, D$theta[best_fit$ord])
+      nclust = length(unique(cluster)),
+      adj.rand = adjustedRandIndex(theta_hat, D$theta),
+      rand = rand.index(theta_hat, D$theta),
+      rmse = sqrt(mean((theta_hat - D$theta)^2)),
+      mae = mean(abs(theta_hat - D$theta))
     )
   )
   
@@ -265,4 +330,10 @@ theta_BayesFuseMR <- function(D, FDR = NULL, EFD = NULL){
   # Combine all results into one data frame
   return(dplyr::bind_rows(results_list))
 
+}
+
+# Custom statistical mode function
+get.mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
 }

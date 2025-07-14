@@ -3,7 +3,7 @@
 #SBATCH --array=0-29
 #SBATCH --time=04:00:00
 #SBATCH --mem=1G
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=1
 #SBATCH --output=logs/%x_%A_%a.out
 
 cd ~/projects/def-mlegault/gf591137/BayesFuseMR/scripts/

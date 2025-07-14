@@ -45,7 +45,7 @@ res_egger       <- lapply(chunk, theta_egger) %>% do.call(rbind.data.frame, .)
 res_median      <- lapply(chunk, theta_median) %>% do.call(rbind, .) %>% data.frame()
 res_mrclust     <- lapply(chunk, theta_mrclust) %>% do.call(rbind.data.frame, .)
 res_fused_lasso <- lapply(chunk, theta_fused_lasso) %>% do.call(rbind.data.frame, .)
-res_bayesfusemr   <- lapply(chunk, theta_BayesFuseMR, FDR = c(0.05, 0.1, 0.2, 0.3, 0.4)) %>% do.call(rbind.data.frame, .)
+# res_bayesfusemr   <- lapply(chunk, theta_BayesFuseMR, FDR = c(0.05, 0.1, 0.2, 0.3, 0.4)) %>% do.call(rbind.data.frame, .)
 
 names(res_median) <- names(res_ivw)
 
@@ -63,7 +63,7 @@ res_all <- bind_rows(
   ,tag_method(res_median, "median")
   ,tag_method(res_mrclust, "mrclust")
   ,tag_method(res_fused_lasso, "fused_lasso")
-  ,tag_method(res_bayesfusemr, "bayesfusemr")
+  #,tag_method(res_bayesfusemr, "bayesfusemr")
 )
 
 # -----------------------------

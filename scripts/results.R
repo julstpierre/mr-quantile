@@ -50,7 +50,7 @@ all_results <- map_dfr(all_files, read_and_expand) %>%
 # Summary statistics
 # -----------------------------
 summary_stats <- all_results %>%
-  group_by(scenario, method, FDR, n_variants, theta_true) %>%
+  group_by(scenario, method, n_variants, theta_true) %>%
   summarise(
     bias = mean(theta_hat - theta_true, na.rm = TRUE),
     rmse = sqrt(mean((theta_hat - theta_true)^2, na.rm = TRUE)),
