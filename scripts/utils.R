@@ -89,8 +89,7 @@ theta_mrclust <- function(D){
                           by = D$beta_hat_y, 
                           bxse = sqrt(D$sigma2_x), 
                           byse = sqrt(D$sigma2_y),
-                          obs_names = paste0("SNP", 1:D$p),
-                          cluster_membership = list(by_prob = 0.8, bound = 0)
+                          obs_names = paste0("SNP", 1:D$p)
                          )
     
     res_em_best <- res_em$results$best
