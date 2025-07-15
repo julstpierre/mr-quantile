@@ -61,7 +61,11 @@ summary_stats <- all_results %>%
     .groups = "drop"
   )
 
-filter(summary_stats, scenario == "D_S3") %>%
+filter(all_results, scenario == "D_S2", method == "fused_lasso") %>% 
+  mutate(iter = row_number()) %>% 
+  filter(!(theta_true >= lcl & theta_true <= ucl))
+
+filter(summary_stats, scenario == "D_S2") %>%
     print(width = Inf)
 
 write_csv(summary_stats, file.path(results_dir, "summary_stats.csv"))

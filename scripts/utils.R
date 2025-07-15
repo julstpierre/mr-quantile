@@ -142,7 +142,7 @@ theta_Mclust <- function(D){
 #--------------------------------------------------------------------------------
 # Fit generalized fused lasso on simulated data
 #--------------------------------------------------------------------------------
-theta_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 3, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
+theta_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 6, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
   
   n <- length(D$beta_hat_y)
   if (is.null(max_clusters)) { max_clusters <- n/2 }
