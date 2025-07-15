@@ -2,5 +2,5 @@
 .Rapp.history
 .DS_Store
 scripts/MR-Horse
-scripts/logs
+results/logs
 scripts/.ipynb_checkpoints/
