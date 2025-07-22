@@ -38,7 +38,8 @@ sim_dat <- function(args){
               "beta" = beta,
               "theta" = theta,
               "nclust" = nclust,
-              "p" = p
+              "p" = p,
+              "maf" = maf
               )
          )
 }
@@ -96,16 +97,23 @@ theta_mrclust <- function(D){
     table(res_em_best$cluster_mean)
     
     # Find cluster with the most number of SNPs
-    main_cluster <- names(which.max(table(res_em_best$cluster)))
-    snps <- filter(res_em_best, cluster == main_cluster) %>%
+    main_cluster <- names(which.max(table(res_em_best$cluster_mean)))
+    snps <- filter(res_em_best, cluster_mean == main_cluster) %>%
             mutate(rows = substr(observation, 4, 6)) %>%
             pull(rows) %>%
             as.numeric()
-
+    
     # Fit IVW on main cluster
+    theta_std <- replicate(1000, {
+      beta_hat_y_k <- rnorm(length(snps), D$beta_hat_y[snps], sqrt(D$sigma2_y[snps]))
+      beta_hat_x_k <- rnorm(length(snps), D$beta_hat_x[snps], sqrt(D$sigma2_x[snps]))
+      lm(beta_hat_y_k~-1+beta_hat_x_k, weights = D$sigma2_y[snps]^-1)$coefficients
+    }) %>% sd()
+    
     return(
       cbind(
-           theta_ivw(D, snps), 
+           Estimate = as.numeric(main_cluster), 
+           StdError = theta_std,
            nclust = length(unique(res_em_best$cluster)),
            adj.rand = adjustedRandIndex(res_em_best$cluster, D$theta),
            rand = rand.index(res_em_best$cluster, D$theta),
@@ -239,14 +247,21 @@ theta_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 6, post_hoc = "me
   if ("3" %in% which(table(cluster) == max(table(cluster)))) {
     main_cluster <- 3
   } else {
-    main_cluster <- table(cluster) |> which.max()
+    main_cluster <- table(cluster) |> which.max() |> names() |> as.numeric()
   }
   snps <- which(cluster == main_cluster)
   
   # Fit IVW on main cluster
+  theta_std <- replicate(1000, {
+    beta_hat_y_k <- rnorm(length(snps), D$beta_hat_y[snps], sqrt(D$sigma2_y[snps]))
+    beta_hat_x_k <- rnorm(length(snps), D$beta_hat_x[snps], sqrt(D$sigma2_x[snps]))
+    lm(beta_hat_y_k~-1+beta_hat_x_k, weights = D$sigma2_y[snps]^-1)$coefficients
+  }) %>% sd()
+  
   return(
     cbind(
-      theta_ivw(D, snps), 
+      Estimate = as.numeric(cluster_means[main_cluster]), 
+      StdError = theta_std,
       nclust = length(unique(cluster)),
       adj.rand = adjustedRandIndex(theta_hat, D$theta),
       rand = rand.index(theta_hat, D$theta),
@@ -268,6 +283,7 @@ theta_BayesFuseMR <- function(D, FDR = NULL, EFD = NULL){
     sigma_y = sqrt(D$sigma2_y),
     sigma_x = sqrt(D$sigma2_x),
     snps = paste0("SNP", 1:D$p),
+    scale_local = 0.5,
     seed = 123
   )
   

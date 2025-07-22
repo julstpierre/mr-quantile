@@ -1,7 +1,7 @@
 
 data {
   int<lower=0> p;               // number of instruments
-  vector[p] pi_scaled;          // Wald ratios (scaled)
+  vector[p] pi;                 // Wald ratios (scaled)
   vector<lower=0>[p] sigma_pi;  // standard errors of ratios
   real<lower=0> scale_local;    // scale for the normal prior for theta[1]
   real<lower=0> scale_global;   // scale for the half cauchy prior for tau
@@ -43,7 +43,7 @@ transformed parameters{
 model {
   // Normal likelihood
   for (i in 1:p){
-    pi_scaled[i] ~ normal(theta[i] / sigma_pi[i], 1);
+    pi[i] ~ normal(theta[i]/sigma_pi[i], 1);
   }
   
   // Priors for hyperparameters

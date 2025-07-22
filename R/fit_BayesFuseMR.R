@@ -37,14 +37,14 @@ fit_BayesFuseMR <- function(beta_hat_y, beta_hat_x, sigma_y, sigma_x,
   # -----------------------------------------------------
   ratios <- beta_hat_y / beta_hat_x
   ratios.se <- sigma_y / abs(beta_hat_x)
-  scaled.ratios = ratios/ratios.se
-  ord <- order(scaled.ratios)
+  scaled.ratios <- ratios / ratios.se
+  ord <- order(ratios)
   
   #-------------------------------------------------------
   # Run MCMC
   #-------------------------------------------------------
   data_list <- list(p = length(ratios), 
-                    pi_scaled = scaled.ratios[ord], 
+                    pi = scaled.ratios[ord], 
                     sigma_pi = ratios.se[ord], 
                     scale_local = scale_local,     # scale parameter for theta_1
                     scale_global = scale_global,   # scale for the half cauchy prior for tau
