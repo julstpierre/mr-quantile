@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=mr_all
 #SBATCH --array=0-29
-#SBATCH --time=04:00:00
+#SBATCH --time=05:00:00
 #SBATCH --mem=1G
 #SBATCH --cpus-per-task=1
 #SBATCH --output=../results/logs/%x_%A_%a.out
