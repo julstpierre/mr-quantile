@@ -65,17 +65,17 @@ theta_egger <- function(D){
 #--------------------------------------------------------------------------------
 # Fit MR_Median on simulated data
 #--------------------------------------------------------------------------------
-theta_median <- function(D){
-    p <- length(D$beta_hat_y)
-    theta_Median <- rq(D$beta_hat_y~-1+D$beta_hat_x, weights = D$sigma2_y^-1)$coefficients[1]
+theta_median <- function(D, snps = 1:D$p){
+    p <- length(snps)
+    theta_Median <- rq(D$beta_hat_y[snps]~-1+D$beta_hat_x[snps], weights = D$sigma2_y[snps]^-1)$coefficients[1]
     names(theta_Median)[1] <- "Estimate"
-    theta_Median["Std. Error"] <- replicate(1000, {
-      beta_hat_y_k <- rnorm(p, D$beta_hat_y, sqrt(D$sigma2_y))
-      beta_hat_x_k <- rnorm(p, D$beta_hat_x, sqrt(D$sigma2_x))
-      rq(beta_hat_y_k~-1+beta_hat_x_k, weights = D$sigma2_y^-1)$coefficients[1]
+    theta_Median["StdError"] <- replicate(1000, {
+      beta_hat_y_k <- rnorm(p, D$beta_hat_y[snps], sqrt(D$sigma2_y[snps]))
+      beta_hat_x_k <- rnorm(p, D$beta_hat_x[snps], sqrt(D$sigma2_x[snps]))
+      rq(beta_hat_y_k~-1+beta_hat_x_k, weights = D$sigma2_y[snps]^-1)$coefficients[1]
     }) %>% sd()
-    theta_Median["Pr(>|t|)"] <- min(1, 2*pt(q=theta_Median["Estimate"] / theta_Median["Std. Error"], df = p-1, lower.tail = FALSE))
-    return(theta_Median)
+    theta_Median["Pvalue"] <- min(1, 2*pt(q=theta_Median["Estimate"] / theta_Median["StdError"], df = p-1, lower.tail = FALSE))
+    return(rbind(theta_Median))
 }
 
 #--------------------------------------------------------------------------------
@@ -103,17 +103,10 @@ theta_mrclust <- function(D){
             pull(rows) %>%
             as.numeric()
     
-    # Fit IVW on main cluster
-    theta_std <- replicate(1000, {
-      beta_hat_y_k <- rnorm(length(snps), D$beta_hat_y[snps], sqrt(D$sigma2_y[snps]))
-      beta_hat_x_k <- rnorm(length(snps), D$beta_hat_x[snps], sqrt(D$sigma2_x[snps]))
-      lm(beta_hat_y_k~-1+beta_hat_x_k, weights = D$sigma2_y[snps]^-1)$coefficients
-    }) %>% sd()
-    
+    # Fit median estimator on main cluster
     return(
       cbind(
-           Estimate = as.numeric(main_cluster), 
-           StdError = theta_std,
+           theta_median(D, snps),
            nclust = length(unique(res_em_best$cluster)),
            adj.rand = adjustedRandIndex(res_em_best$cluster, D$theta),
            rand = rand.index(res_em_best$cluster, D$theta),
@@ -137,7 +130,7 @@ theta_Mclust <- function(D){
   # Fit IVW on main cluster
   return(
     cbind(
-      theta_ivw(D, snps), 
+      theta_median(D, snps), 
       nclust = length(unique(res_em$classification)),
       adj.rand = adjustedRandIndex(res_em$classification, D$theta),
       rand = rand.index(res_em$classification, D$theta),
@@ -194,7 +187,7 @@ theta_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 6, post_hoc = "me
       # Compute EBIC for each lambda
       rss <- colSums((genlasso.fit$fit[1:n, ] - ytilde[1:n])^2)
       df <- genlasso.fit$df  # effective degrees of freedom
-      ebic <- rss / n + log(n) * df / n + 2 * ebic_coef * log(choose(n-1, df-1)) / n
+      ebic <- rss / n + log(n) * df / n + 2 * ebic_coef * log(choose(n, df)) / n
         
       # Return best fit
       results[[i]] <- list(
@@ -251,17 +244,10 @@ theta_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 6, post_hoc = "me
   }
   snps <- which(cluster == main_cluster)
   
-  # Fit IVW on main cluster
-  theta_std <- replicate(1000, {
-    beta_hat_y_k <- rnorm(length(snps), D$beta_hat_y[snps], sqrt(D$sigma2_y[snps]))
-    beta_hat_x_k <- rnorm(length(snps), D$beta_hat_x[snps], sqrt(D$sigma2_x[snps]))
-    lm(beta_hat_y_k~-1+beta_hat_x_k, weights = D$sigma2_y[snps]^-1)$coefficients
-  }) %>% sd()
-  
+  # Fit median estimator on main cluster
   return(
     cbind(
-      Estimate = as.numeric(cluster_means[main_cluster]), 
-      StdError = theta_std,
+      theta_median(D, snps),
       nclust = length(unique(cluster)),
       adj.rand = adjustedRandIndex(theta_hat, D$theta),
       rand = rand.index(theta_hat, D$theta),
