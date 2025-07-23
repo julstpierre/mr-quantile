@@ -106,14 +106,14 @@ theta_mrclust <- function(D){
     # Fit IVW or median estimator on main cluster
     nclust <- length(unique(res_em_best$cluster))
     if (nclust == 1) {
-      theta_hat <- theta_ivw(D)
+      theta_main <- theta_ivw(D)
     } else {
-      theta_hat <- theta_median(D, snps)
+      theta_main <- theta_median(D, snps)
     }
     
     return(
       cbind(
-           theta_hat,
+           theta_main,
            nclust = nclust,
            adj.rand = adjustedRandIndex(res_em_best$cluster, D$theta),
            rand = rand.index(res_em_best$cluster, D$theta),
@@ -254,14 +254,14 @@ theta_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 6, post_hoc = "me
   # Fit IVW or median estimator on main cluster
   nclust <- length(unique(cluster))
   if (nclust == 1) {
-    theta_hat <- theta_ivw(D)
+    theta_main <- theta_ivw(D)
   } else {
-    theta_hat <- theta_median(D, snps)
+    theta_main <- theta_median(D, snps)
   }
   
   return(
     cbind(
-      theta_hat,
+      theta_main,
       nclust = nclust,
       adj.rand = adjustedRandIndex(theta_hat, D$theta),
       rand = rand.index(theta_hat, D$theta),
