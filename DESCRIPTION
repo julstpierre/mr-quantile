@@ -1,20 +1,15 @@
-Package: BayesFuseMR
+Package: MRFuse
 Type: Package
-Title: Bayesian Fused Shrinkage Estimation for Mendelian Randomization
+Title: Fused Shrinkage Estimation for Mendelian Randomization
 Version: 0.0.1
 Authors@R: 
     person("Julien", "St-Pierre", email = "julien.st-pierre@umontreal.ca", role = c("aut", "cre"))
-Description: Implements fused shrinkage models for Mendelian Randomization using 
-    hierarchical priors. Includes functions for model fitting via cmdstanr, and tools for 
-    postprocessing and visualization.
+Description: Implements fused shrinkage models for Mendelian Randomization.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.2
 Depends: R (>= 3.5.0)
 Imports: 
-    cmdstanr,
-    posterior,
     tidyr,
-    dplyr,
-    ggplot2
+    dplyr

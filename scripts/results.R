@@ -55,6 +55,7 @@ summary_stats <- all_results %>%
     bias = mean(theta_hat - theta_true, na.rm = TRUE),
     rmse = sqrt(mean((theta_hat - theta_true)^2, na.rm = TRUE)),
     coverage = mean(theta_true >= lcl & theta_true <= ucl, na.rm = TRUE),
+    ci_width = mean(ucl - lcl, na.rm = TRUE),
     nclust = mean(nclust, na.rm = TRUE),
     rand = mean(rand, na.rm = TRUE),
     n = n(),

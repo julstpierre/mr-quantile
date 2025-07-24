@@ -65,11 +65,11 @@ theta_egger <- function(D){
 #--------------------------------------------------------------------------------
 # Fit MR_Median on simulated data
 #--------------------------------------------------------------------------------
-theta_median <- function(D, snps = 1:D$p){
+theta_median <- function(D, snps = 1:D$p, boot_rep = 1000){
     p <- length(snps)
     theta_Median <- rq(D$beta_hat_y[snps]~-1+D$beta_hat_x[snps], weights = D$sigma2_y[snps]^-1)$coefficients[1]
     names(theta_Median)[1] <- "Estimate"
-    theta_Median["StdError"] <- replicate(1000, {
+    theta_Median["StdError"] <- replicate(boot_rep, {
       beta_hat_y_k <- rnorm(p, D$beta_hat_y[snps], sqrt(D$sigma2_y[snps]))
       beta_hat_x_k <- rnorm(p, D$beta_hat_x[snps], sqrt(D$sigma2_x[snps]))
       rq(beta_hat_y_k~-1+beta_hat_x_k, weights = D$sigma2_y[snps]^-1)$coefficients[1]
@@ -270,85 +270,4 @@ theta_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 6, post_hoc = "me
     )
   )
   
-}
-
-#--------------------------------------------------------------------------------
-# Fit Bayesian Fused lasso on simulated data
-#--------------------------------------------------------------------------------
-theta_BayesFuseMR <- function(D, FDR = NULL, EFD = NULL){
-  
-  fit <- fit_BayesFuseMR(
-    beta_hat_y = D$beta_hat_y,
-    beta_hat_x = D$beta_hat_x,
-    sigma_y = sqrt(D$sigma2_y),
-    sigma_x = sqrt(D$sigma2_x),
-    snps = paste0("SNP", 1:D$p),
-    scale_local = 0.5,
-    seed = 123
-  )
-  
-  results_list <- list()
-    
-  if (!is.null(FDR)) {
-    # Loop over FDR values
-    for (fdr in FDR) {
-          best_fit <- clust_BayesFuseMR(fit, FDR = fdr)
-            
-          # Find cluster with the most number of SNPs
-          main_cluster <- names(which.max(table(best_fit$cluster)))
-          theta_main <- best_fit %>%
-            distinct(cluster, .keep_all = TRUE) %>%
-            filter(cluster == main_cluster) %>%
-            dplyr::select(cluster_mean, cluster_se) %>%
-            rename(Estimate = cluster_mean, StdError = cluster_se) %>%
-            mutate(Pvalue = 2 * pnorm(abs(Estimate / StdError), lower.tail = FALSE))
-
-          ord <- order(as.numeric(substr(fit$snps, 4, 6)))
-
-          res <- cbind(
-            theta_main, 
-            nclust = length(unique(best_fit$cluster)),
-            adj.rand = adjustedRandIndex(best_fit$cluster[ord], D$theta),
-            rand = rand.index(best_fit$cluster[ord], D$theta),
-            FDR = fdr
-          )
-
-          results_list[[as.character(fdr)]] <- res
-        }
-  } else if (!is.null(EFD)) {
-    # Loop over EFD values
-    for (efd in EFD) {
-        best_fit <- clust_BayesFuseMR(fit, EFD = efd)
-
-        # Find cluster with the most number of SNPs
-        main_cluster <- names(which.max(table(best_fit$cluster)))
-        theta_main <- best_fit %>%
-            filter(cluster == main_cluster) %>%
-            dplyr::select(cluster_mean, cluster_se) %>%
-            rename(Estimate = cluster_mean, StdError = cluster_se) %>%
-            mutate(Pvalue = 2 * pnorm(abs(Estimate / StdError), lower.tail = FALSE))
-
-        ord <- order(as.numeric(substr(fit$snps, 4, 6)))
-
-        res <- cbind(
-            theta_main, 
-            nclust = length(unique(best_fit$cluster)),
-            adj.rand = adjustedRandIndex(best_fit$cluster[ord], D$theta),
-            rand = rand.index(best_fit$cluster[ord], D$theta),
-            EFD = efd
-          )
-
-          results_list[[as.character(efd)]] <- res
-        }
-  }
-  
-  # Combine all results into one data frame
-  return(dplyr::bind_rows(results_list))
-
-}
-
-# Custom statistical mode function
-get.mode <- function(x) {
-  ux <- unique(x)
-  ux[which.max(tabulate(match(x, ux)))]
 }
