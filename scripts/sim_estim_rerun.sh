@@ -1,16 +1,16 @@
 #!/bin/bash
-#SBATCH --job-name=mr_D_S2_null_chunk2
+#SBATCH --job-name=mr_D_S5
 #SBATCH --time=04:00:00
 #SBATCH --mem=1G
-#SBATCH --cpus-per-task=4
-#SBATCH --output=logs/%x_%j.out
+#SBATCH --cpus-per-task=1
+#SBATCH --output=../results/logs/%x_%j.out
 
 cd ~/projects/def-mlegault/gf591137/BayesFuseMR/scripts/
 module load r
 
-SCENARIO="D_S2_null"
-START_CHUNK=201
-END_CHUNK=400
+SCENARIO="D_S5"
+START_CHUNK=1
+END_CHUNK=1000
 
 echo "Running $SCENARIO, chunks $START_CHUNK to $END_CHUNK"
 Rscript sim_estim.R $SCENARIO $START_CHUNK $END_CHUNK

@@ -56,5 +56,12 @@ D_S4 <- filter(params, beta == 0.4, nclust == 4, p == 100) %>%
           replicate(num_iters, .) %>%
           mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
 
+set.seed(2025070107)
+D_S5 <- filter(params, beta == 0.4, nclust == 4, p == 30) %>%
+  mutate(nu = 3) %>%
+  list() %>%
+  replicate(num_iters, .) %>%
+  mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
+
 # Save simulated data
-save(D_S1, D_S1_null, D_S2, D_S2_null, D_S3, D_S4, file = '../data/simulations/sim_dat.R')
+save(D_S1, D_S1_null, D_S2, D_S2_null, D_S3, D_S4, D_S5, file = '../data/simulations/sim_dat.R')

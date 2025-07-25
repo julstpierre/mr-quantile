@@ -7,7 +7,6 @@ library(quantreg)
 library(glmnet)
 library(mrclust)
 library(genlasso)
-library(BayesFuseMR)
 library(fossil)
 library(mclust)
 
