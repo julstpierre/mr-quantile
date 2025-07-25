@@ -6,13 +6,13 @@ sim_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(beta = 0.4, nclust = 4, p = 30, h2 = 0.30, n = 50000, nu = NULL)
+  # args <- list(beta = 0.4, nclust = 4, p = 30, h2 = 0.30, n = 50000, a = -Inf)
   n <- args$n
   beta <- args$beta
   nclust <- args$nclust
   p <- args$p
   h2 <- args$h2
-  nu <- args$nu
+  a <- args$a
   
   if (nclust == 1){
     theta <- rep(beta, p)
@@ -25,13 +25,8 @@ sim_dat <- function(args){
   }
   
   maf <- runif(p, 0.05, 0.5)
-  scale_beta_x <- sqrt( h2 / (2 * p * maf * ( 1 - maf ) ) )
-  if (is.null(nu)){
-    beta_x <- rnorm( p, 0, scale_beta_x )
-  } else {
-    beta_x <- scale_beta_x  * sqrt( (nu - 2) / nu ) * rt(p, df = nu)
-    hist(beta_x)
-  }
+  beta_x_raw <- truncnorm::rtruncnorm(p, a = a, b = Inf, mean = 0, sd = 1)
+  beta_x <- sqrt( h2 / sum( beta_x_raw^2 * 2 * maf * ( 1 - maf ) ) ) * beta_x_raw
   beta_y <- theta * beta_x
   sigma2 <-  1 / ( 2 * n * maf * ( 1 - maf ) ) 
   

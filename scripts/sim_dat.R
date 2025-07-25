@@ -11,9 +11,10 @@ num_iters <- 1000
 params <- expand.grid(
   p = c(30, 100),
   beta = c(0, 0.4),
-  h2 = c(0.30),
+  h2 = c(0.10),
   nclust = c(1, 4),
-  n = 50000
+  n = 50000,
+  a = -Inf
 )
 
 #----------------------------------------------------------------------
@@ -58,7 +59,7 @@ D_S4 <- filter(params, beta == 0.4, nclust == 4, p == 100) %>%
 
 set.seed(2025070107)
 D_S5 <- filter(params, beta == 0.4, nclust == 4, p == 30) %>%
-  mutate(nu = 3) %>%
+  mutate(a = 0) %>%
   list() %>%
   replicate(num_iters, .) %>%
   mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)

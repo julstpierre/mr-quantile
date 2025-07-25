@@ -23,9 +23,9 @@ if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 # Scenario metadata
 # -----------------------------
 scenario_metadata <- tibble(
-  scenario = c("S1_null", "S1", "S2_null", "S2", "S3", "S4"),
-  theta_true = c(0, 0.4, 0, 0.4, 0.4, 0.4),
-  n_variants = c(30, 30, 100, 100, 30, 100)
+  scenario = c("S1_null", "S1", "S2_null", "S2", "S3", "S4", "S5"),
+  theta_true = c(0, 0.4, 0, 0.4, 0.4, 0.4, 0.4),
+  n_variants = c(30, 30, 100, 100, 30, 100, 30)
 )
 
 # -----------------------------
@@ -78,6 +78,9 @@ filter(summary_stats, scenario == "S3") %>%
   print(width = Inf)
 
 filter(summary_stats, scenario == "S4") %>%
+  print(width = Inf)
+
+filter(summary_stats, scenario == "S5") %>%
   print(width = Inf)
 
 write_csv(summary_stats, file.path(results_dir, "summary_stats.csv"))
