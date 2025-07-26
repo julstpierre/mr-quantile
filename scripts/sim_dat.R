@@ -11,7 +11,7 @@ num_iters <- 1000
 params <- expand.grid(
   p = c(30, 100),
   beta = c(0, 0.4),
-  h2 = c(0.10),
+  h2 = c(0.30),
   nclust = c(1, 4),
   n = 50000,
   a = -Inf
