@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=mr_all
-#SBATCH --array=0-34
+#SBATCH --array=0-29
 #SBATCH --time=03:00:00
 #SBATCH --mem=1G
 #SBATCH --cpus-per-task=1

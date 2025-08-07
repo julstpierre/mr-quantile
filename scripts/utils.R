@@ -6,13 +6,12 @@ sim_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(beta = 0.4, nclust = 4, p = 30, h2 = 0.30, n = 50000, a = -Inf)
+  # args <- list(beta = 0, nclust = 1, p = 100, h2 = 0.30, n = 50000)
   n <- args$n
   beta <- args$beta
   nclust <- args$nclust
   p <- args$p
   h2 <- args$h2
-  a <- args$a
   
   if (nclust == 1){
     theta <- rep(beta, p)
@@ -25,12 +24,12 @@ sim_dat <- function(args){
   }
   
   maf <- runif(p, 0.05, 0.5)
-  beta_x_raw <- truncnorm::rtruncnorm(p, a = a, b = Inf, mean = 0, sd = 1)
+  beta_x_raw <- rnorm(p, mean = 0, sd = 1)
   beta_x <- sqrt( h2 / sum( beta_x_raw^2 * 2 * maf * ( 1 - maf ) ) ) * beta_x_raw
   beta_y <- theta * beta_x
   sigma2 <-  1 / ( 2 * n * maf * ( 1 - maf ) ) 
   
-  beta_hat_x <- rnorm( p, beta_x, sqrt( sigma2 ) )
+  beta_hat_x <- rnorm( p, beta_x, sqrt(sigma2 ) )
   beta_hat_y <- rnorm( p, beta_y, sqrt( sigma2 ) )
   
   return(list("beta_hat_x" = beta_hat_x, 
@@ -44,6 +43,101 @@ sim_dat <- function(args){
               "maf" = maf
               )
          )
+}
+
+sim_indv_dat <- function(args){
+  
+  #--------------------------------------------------------------------------------
+  # Define simulation parameters
+  #--------------------------------------------------------------------------------
+  # args <- list(beta = 0, nclust = 1, p = 100, h2 = 0.30, n = 50000, theta_M = 0)
+  n <- args$n
+  beta <- args$beta
+  nclust <- args$nclust
+  p <- args$p
+  h2 <- args$h2
+  theta_M <- args$theta_M
+  
+  if (nclust == 1){
+    theta_D <- rep(beta, p)
+  } else if (nclust == 4){
+    if (p == 30){
+      theta_D <- rep(c(beta, -0.4, 0.8, 0), times = c(12, 6, 6, 6))
+    } else if (p == 100){
+      theta_D <- rep(c(beta, -0.4, 0.8, 0), times = c(45, 20, 20, 15))
+    }
+  }
+  
+  # Simulate genetic data and confounders
+  maf <- runif(p, 0.05, 0.5)
+  G <- sapply(maf, function(maf) rbinom(2 * n, 2, maf))
+  U <- rnorm(2 * n)
+  epsilon_w <- mvrnorm(2 * n, mu = rep(0, nclust), Sigma = diag(1, nclust))
+  epsilon_x <- rnorm(2 * n)
+  epsilon_m <- rnorm(2 * n)
+  epsilon_y <- rnorm(2 * n)
+  
+  # Simulate latent factors with 50% of variance explained by genetic predictors
+  delta_W <- mvrnorm(p, mu = rep(0.2, nclust), Sigma = diag(0.1^2, nclust)) * sapply(1:nclust, function(i) theta_D == unique(theta_D)[i])
+  h2_w <- 0.5
+  scaling_factors <- sqrt( h2_w / (1 - h2_w) * apply(epsilon_w, 2, var) / apply(G %*% delta_W, 2, var))
+  if (nclust == 1){
+    delta_W <- delta_W * scaling_factors
+  } else {
+    delta_W <- delta_W %*% diag(scaling_factors)
+  }
+  W <- G %*% delta_W + epsilon_w
+  
+  # Simulate exposure with heritability h2
+  delta_X <- runif(nclust, -1, 1)
+  phi <- h2 * ( var( U ) + var( epsilon_x ) ) / ( var( G %*% ( delta_W %*% delta_X ) ) - h2 * var( W %*% delta_X ) )
+  delta_X <- delta_X %*% sqrt(phi)
+  
+  X <- W %*% delta_X + U + epsilon_x
+  
+  # Simulate mediator
+  delta_M <- rnorm(p, 0, 0.1)
+  M <- 0.25 * X + U + epsilon_m + G %*% delta_M
+    
+  # Simulate outcome
+  gamma <- delta_W %*% delta_X
+  alpha <- gamma * (theta_D - beta)
+  delta_y <- qr.solve(delta_W, alpha)
+  
+  Y <- X * beta + W %*% delta_y + M * theta_M + U + epsilon_y 
+  
+  # Summary stats for X
+  sampX = seq(1, n)
+  Gc <- scale(G[sampX, ], scale = FALSE)
+  Xc <- X[sampX] - mean(X[sampX])
+  XtG <- crossprod(Gc, Xc)            
+  GtG <- colSums(Gc^2)                   
+  beta_hat_x <- XtG / GtG
+  residuals2 <- colSums((matrix(Xc, n, p) - Gc * rep(beta_hat_x, each = n))^2)
+  sigma2_x <- residuals2 / (n - 2) / GtG
+  
+  # Summary stats for Y
+  sampY <- seq(n + 1, 2 * n)
+  Yc <- Y[sampY] - mean(Y[sampY])
+  Gc <- scale(G[sampY, ], scale = FALSE)
+  XtG <- crossprod(Gc, Yc)
+  GtG <- colSums(Gc^2)
+  beta_hat_y <- XtG / GtG
+  residuals2 <- colSums((matrix(Yc, n, p) - Gc * rep(beta_hat_y, each = n))^2)
+  sigma2_y <- residuals2 / (n - 2) / GtG
+  
+  return(list("beta_hat_x" = as.vector(beta_hat_x), 
+              "sigma2_x" = sigma2_x, 
+              "beta_hat_y" = as.vector(beta_hat_y), 
+              "sigma2_y" = sigma2_y, 
+              "beta" = beta,
+              "theta_D" = theta_D,
+              "theta_M" = theta_M,
+              "nclust" = nclust,
+              "p" = p,
+              "maf" = maf
+  )
+  )
 }
 
 #--------------------------------------------------------------------------------
@@ -117,10 +211,10 @@ theta_mrclust <- function(D){
       cbind(
            theta_main,
            nclust = nclust,
-           adj.rand = adjustedRandIndex(res_em_best$cluster, D$theta),
-           rand = rand.index(res_em_best$cluster, D$theta),
-           rmse = sqrt(mean((res_em_best$cluster_mean - D$theta)^2)),
-           mae = mean(abs(res_em_best$cluster_mean - D$theta))
+           adj.rand = adjustedRandIndex(res_em_best$cluster, D$theta_D),
+           rand = rand.index(res_em_best$cluster, D$theta_D),
+           rmse = sqrt(mean((res_em_best$cluster_mean - D$theta_D)^2)),
+           mae = mean(abs(res_em_best$cluster_mean - D$theta_D))
            )
       )
 }
@@ -265,10 +359,10 @@ theta_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 6, post_hoc = "me
     cbind(
       theta_main,
       nclust = nclust,
-      adj.rand = adjustedRandIndex(theta_hat, D$theta),
-      rand = rand.index(theta_hat, D$theta),
-      rmse = sqrt(mean((theta_hat - D$theta)^2)),
-      mae = mean(abs(theta_hat - D$theta))
+      adj.rand = adjustedRandIndex(theta_hat, D$theta_D),
+      rand = rand.index(theta_hat, D$theta_D),
+      rmse = sqrt(mean((theta_hat - D$theta_D)^2)),
+      mae = mean(abs(theta_hat - D$theta_D))
     )
   )
   
