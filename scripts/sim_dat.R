@@ -13,7 +13,7 @@ params <- expand.grid(
   beta = c(0, 0.4),
   h2 = c(0.30),
   nclust = c(1, 4),
-  n = 50000,
+  n = 75000,
   theta_M = 0
 )
 

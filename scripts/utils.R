@@ -6,7 +6,7 @@ sim_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(beta = 0, nclust = 1, p = 100, h2 = 0.30, n = 50000)
+  # args <- list(beta = 0.4, nclust = 1, p = 100, h2 = 0.30, n = 50000)
   n <- args$n
   beta <- args$beta
   nclust <- args$nclust
@@ -29,7 +29,7 @@ sim_dat <- function(args){
   beta_y <- theta * beta_x
   sigma2 <-  1 / ( 2 * n * maf * ( 1 - maf ) ) 
   
-  beta_hat_x <- rnorm( p, beta_x, sqrt(sigma2 ) )
+  beta_hat_x <- rnorm( p, beta_x, sqrt( sigma2 ) )
   beta_hat_y <- rnorm( p, beta_y, sqrt( sigma2 ) )
   
   return(list("beta_hat_x" = beta_hat_x, 
@@ -50,7 +50,7 @@ sim_indv_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(beta = 0, nclust = 1, p = 100, h2 = 0.30, n = 50000, theta_M = 0)
+  # args <- list(beta = 0.4, nclust = 4, p = 100, h2 = 0.30, n = 50000, theta_M = 0)
   n <- args$n
   beta <- args$beta
   nclust <- args$nclust
@@ -88,7 +88,7 @@ sim_indv_dat <- function(args){
   }
   W <- G %*% delta_W + epsilon_w
   
-  # Simulate exposure with heritability h2
+  # Simulate exposure with heritability equal to h2
   delta_X <- runif(nclust, -1, 1)
   phi <- h2 * ( var( U ) + var( epsilon_x ) ) / ( var( G %*% ( delta_W %*% delta_X ) ) - h2 * var( W %*% delta_X ) )
   delta_X <- delta_X %*% sqrt(phi)
@@ -170,7 +170,7 @@ theta_median <- function(D, snps = 1:D$p, boot_rep = 1000){
       beta_hat_x_k <- rnorm(p, D$beta_hat_x[snps], sqrt(D$sigma2_x[snps]))
       rq(beta_hat_y_k~-1+beta_hat_x_k, weights = D$sigma2_y[snps]^-1)$coefficients[1]
     }) %>% sd()
-    theta_Median["Pvalue"] <- min(1, 2*pt(q=theta_Median["Estimate"] / theta_Median["StdError"], df = p-1, lower.tail = FALSE))
+    theta_Median["Pvalue"] <- min(1, 2*pt(q=abs(theta_Median["Estimate"] / theta_Median["StdError"]), df = p-1, lower.tail = FALSE))
     return(rbind(theta_Median))
 }
 
