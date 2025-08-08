@@ -39,11 +39,11 @@ chunk <- D[start_idx:end_idx]
 # -----------------------------
 # Run all MR methods
 # -----------------------------
-res_ivw         <- lapply(chunk, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_egger       <- lapply(chunk, theta_egger) %>% do.call(rbind.data.frame, .)
-res_median      <- lapply(chunk, theta_median) %>% do.call(rbind.data.frame, .)
-res_mrclust     <- lapply(chunk, theta_mrclust) %>% do.call(rbind.data.frame, .)
-res_fused_lasso <- lapply(chunk, theta_fused_lasso) %>% do.call(rbind.data.frame, .)
+res_ivw         <- lapply(chunk, fit_ivw) %>% do.call(rbind.data.frame, .)
+res_egger       <- lapply(chunk, fit_egger) %>% do.call(rbind.data.frame, .)
+res_median      <- lapply(chunk, fit_median) %>% do.call(rbind.data.frame, .)
+res_mrclust     <- lapply(chunk, fit_mvmrclust) %>% do.call(rbind.data.frame, .)
+res_fused_lasso <- lapply(chunk, fit_mvfused_lasso) %>% do.call(rbind.data.frame, .)
 
 # -----------------------------
 # Combine results into a single data frame and add a column for the model
