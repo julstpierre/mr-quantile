@@ -180,25 +180,25 @@ fit_ivw <- function(D, snps = 1:D$p){
 #--------------------------------------------------------------------------------
 # Fit MR_Egger on simulated data
 #--------------------------------------------------------------------------------
-theta_egger <- function(D){
-    MRInputObject = mr_input(bx = D$beta_hat_x, bxse = sqrt(D$sigma2_x), by = D$beta_hat_y, byse = sqrt(D$sigma2_y))
+theta_egger <- function(D, snps = 1:D$p){
+    MRInputObject = mr_input(bx = D$beta_hat_x[snps], bxse = sqrt(D$sigma2_x[snps]), by = D$beta_hat_y[snps], byse = sqrt(D$sigma2_y[snps]))
     MR_Egger <- mr_egger(MRInputObject)
     return(cbind("Estimate" = unname(MR_Egger$Estimate[1]), "StdError" = unname(MR_Egger$StdError.Est[1]), "Pvalue" = unname(MR_Egger$Pvalue.Est[1])))
 }
 
-theta_mvegger <- function(D){
-  MRInputObject = mr_mvinput(bx = cbind(D$beta_hat_x, D$beta_hat_m), 
-                             bxse = sqrt(cbind(D$sigma2_x, D$sigma2_m)), 
-                             by = D$beta_hat_y, 
-                             byse = sqrt(D$sigma2_y)
-                             )
+theta_mvegger <- function(D, snps = 1:D$p){
+  MRInputObject = mr_mvinput(bx = cbind(D$beta_hat_x[snps], D$beta_hat_m[snps]), 
+                             bxse = sqrt(cbind(D$sigma2_x[snps], D$sigma2_m[snps])), 
+                             by = D$beta_hat_y[snps], 
+                             byse = sqrt(D$sigma2_y[snps])
+  )
   MR_Egger <- mr_mvegger(MRInputObject)
   return(cbind("Estimate" = unname(MR_Egger$Estimate[1]), "StdError" = unname(MR_Egger$StdError.Est[1]), "Pvalue" = unname(MR_Egger$Pvalue.Est[1])))
 }
 
-fit_egger <- function(D){
-  theta_T <- theta_egger(D)
-  theta_D <- theta_mvegger(D)
+fit_egger <- function(D, snps = 1:D$p){
+  theta_T <- theta_egger(D, snps)
+  theta_D <- theta_mvegger(D, snps)
   theta <- cbind(
     theta_T_hat = theta_T[,"Estimate"], theta_T_se = theta_T[,"StdError"],
     theta_D_hat = theta_D[,"Estimate"], theta_D_se = theta_D[,"StdError"]
@@ -215,9 +215,11 @@ theta_median <- function(D, snps = 1:D$p, boot_rep = 1000){
     theta_Median <- rq(D$beta_hat_y[snps]~-1+D$beta_hat_x[snps], weights = D$sigma2_y[snps]^-1)$coefficients[1]
     names(theta_Median)[1] <- "Estimate"
     theta_Median["StdError"] <- replicate(boot_rep, {
-      beta_hat_y_k <- rnorm(p, D$beta_hat_y[snps], sqrt(D$sigma2_y[snps]))
-      beta_hat_x_k <- rnorm(p, D$beta_hat_x[snps], sqrt(D$sigma2_x[snps]))
-      rq(beta_hat_y_k~-1+beta_hat_x_k, weights = D$sigma2_y[snps]^-1)$coefficients[1]
+      # beta_hat_y_k <- rnorm(p, D$beta_hat_y[snps], sqrt(D$sigma2_y[snps]))
+      # beta_hat_x_k <- rnorm(p, D$beta_hat_x[snps], sqrt(D$sigma2_x[snps]))
+      # rq(beta_hat_y_k~-1+beta_hat_x_k, weights = D$sigma2_y[snps]^-1)$coefficients[1]
+      idx <- sample(snps, length(snps), replace = TRUE)
+      rq(D$beta_hat_y[idx]~-1+D$beta_hat_x[idx], weights = D$sigma2_y[idx]^-1)$coefficients[1]
     }) %>% sd()
     theta_Median["Pvalue"] <- min(1, 2*pt(q=abs(theta_Median["Estimate"] / theta_Median["StdError"]), df = p-1, lower.tail = FALSE))
     return(rbind(theta_Median))
@@ -227,11 +229,14 @@ theta_mvmedian <- function(D, snps = 1:D$p, boot_rep = 1000){
   p <- length(snps)
   theta_Median <- rq(D$beta_hat_y[snps]~-1+D$beta_hat_x[snps] + D$beta_hat_m[snps], weights = D$sigma2_y[snps]^-1)$coefficients[1]
   names(theta_Median)[1] <- "Estimate"
+  rho <- cor(D$beta_hat_x[snps], D$beta_hat_m[snps])
   theta_Median["StdError"] <- replicate(boot_rep, {
-    beta_hat_y_k <- rnorm(p, D$beta_hat_y[snps], sqrt(D$sigma2_y[snps]))
-    beta_hat_x_k <- rnorm(p, D$beta_hat_x[snps], sqrt(D$sigma2_x[snps]))
-    beta_hat_m_k <- rnorm(p, D$beta_hat_m[snps], sqrt(D$sigma2_m[snps]))
-    rq(beta_hat_y_k~-1+beta_hat_x_k+beta_hat_m_k, weights = D$sigma2_y[snps]^-1)$coefficients[1]
+    # beta_hat_y_k <- rnorm(p, D$beta_hat_y[snps], sqrt(D$sigma2_y[snps]))
+    # beta_hat_x_k <- rnorm(p, D$beta_hat_x[snps], sqrt(D$sigma2_x[snps]))
+    # beta_hat_m_k <- rnorm(p, D$beta_hat_m[snps] + rho * sqrt(D$sigma2_m[snps]) / sqrt(D$sigma2_x[snps]) * (beta_hat_x_k - D$beta_hat_x[snps]), sqrt((1 - rho^2) * D$sigma2_m[snps]))
+    # rq(beta_hat_y_k~-1+beta_hat_x_k+beta_hat_m_k, weights = D$sigma2_y[snps]^-1)$coefficients[1]
+    idx <- sample(snps, length(snps), replace = TRUE)
+    rq(D$beta_hat_y[idx]~-1+D$beta_hat_x[idx]+D$beta_hat_m[idx], weights = D$sigma2_y[idx]^-1)$coefficients[1]
   }) %>% sd()
   theta_Median["Pvalue"] <- min(1, 2*pt(q=abs(theta_Median["Estimate"] / theta_Median["StdError"]), df = p-1, lower.tail = FALSE))
   return(rbind(theta_Median))
@@ -336,7 +341,7 @@ fit_mvmrclust <- function(D){
 #--------------------------------------------------------------------------------
 # Fit generalized fused lasso on simulated data
 #--------------------------------------------------------------------------------
-fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 6, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
+fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 7, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
   
   n <- length(D$beta_hat_y)
   if (is.null(max_clusters)) { max_clusters <- n/2 }
@@ -455,7 +460,7 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 6, post_hoc = "mean
   
 }
 
-fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 6, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
+fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 7, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
   
   n <- length(D$beta_hat_y)
   if (is.null(max_clusters)) { max_clusters <- n/2 }
@@ -474,7 +479,7 @@ fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 6, post_hoc = "me
   ) %>% as.matrix()
   
   # Apply a l2 regularization to the ratios
-  if (is.null(lambda_list)) { lambda_list <- seq(0, 3, 0.1) }
+  if (is.null(lambda_list)) { lambda_list <- seq(0, 4, 0.1) }
   results <- vector("list", length(lambda_list))
   
   for (i in seq_along(lambda_list)) {

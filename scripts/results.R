@@ -23,9 +23,9 @@ if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 # Scenario metadata
 # -----------------------------
 scenario_metadata <- tibble(
-  scenario = c("S1_null", "S1", "S2_null", "S2", "S3", "S4", "S5"),
-  theta_true = c(0, 0.4, 0, 0.4, 0.4, 0.4, 0.4),
-  n_variants = c(30, 30, 100, 100, 30, 100, 30)
+  scenario = paste0("S", 1:9),
+  theta_D_true = c(0, 0.4, 0, 0.4, 0, 0.4, 0.4, 0.4, 0.4),
+  theta_T_true = c(-0.2, 0.2, 0, 0.4, 0.2, 0.6, 0.2, 0.4, 0.6)
 )
 
 # -----------------------------
@@ -43,47 +43,66 @@ all_results <- map_dfr(all_files, read_and_expand) %>%
   mutate(scenario = str_extract(source_file, "S\\d+(_null)?")) %>%
   left_join(scenario_metadata, by = "scenario") %>%
   select(-source_file) %>% 
-  rename(theta_hat = Estimate, theta_se = StdError) %>%
-  mutate(lcl = theta_hat - 1.96 * theta_se, ucl = theta_hat + 1.96 * theta_se)
+  mutate(theta_T_lcl = theta_T_hat - 1.96 * theta_T_se, theta_T_ucl = theta_T_hat + 1.96 * theta_T_se) %>%
+  mutate(theta_D_lcl = theta_D_hat - 1.96 * theta_D_se, theta_D_ucl = theta_D_hat + 1.96 * theta_D_se)
 
 # -----------------------------
 # Summary statistics
 # -----------------------------
-summary_stats <- all_results %>%
-  group_by(scenario, method, n_variants, theta_true) %>%
+summary_stats_theta_T <- all_results %>%
+  group_by(scenario, method) %>%
   summarise(
-    bias = mean(theta_hat - theta_true, na.rm = TRUE),
-    rmse = sqrt(mean((theta_hat - theta_true)^2, na.rm = TRUE)),
-    coverage = mean(theta_true >= lcl & theta_true <= ucl, na.rm = TRUE),
-    ci_width = mean(ucl - lcl, na.rm = TRUE),
+    mean = mean(theta_T_hat, na.rm = TRUE),
+    bias = mean(theta_T_hat - theta_T_true, na.rm = TRUE),
+    sd = sd(theta_T_hat, na.rm = TRUE),
+    coverage = mean(theta_T_true >= theta_T_lcl & theta_T_true <= theta_T_ucl, na.rm = TRUE),
+    ci_width = mean(theta_T_ucl - theta_T_lcl, na.rm = TRUE),
     nclust = mean(nclust, na.rm = TRUE),
     rand = mean(rand, na.rm = TRUE),
     n = n(),
     .groups = "drop"
   )
 
-filter(summary_stats, scenario == "S1") %>%
+summary_stats_theta_D <- all_results %>%
+  group_by(scenario, method) %>%
+  summarise(
+    mean = mean(theta_D_hat, na.rm = TRUE),
+    bias = mean(theta_D_hat - theta_D_true, na.rm = TRUE),
+    sd = sd(theta_D_hat, na.rm = TRUE),
+    coverage = mean(theta_D_true >= theta_D_lcl & theta_D_true <= theta_D_ucl, na.rm = TRUE),
+    ci_width = mean(theta_D_ucl - theta_D_lcl, na.rm = TRUE),
+    nclust = mean(nclust, na.rm = TRUE),
+    rand = mean(rand, na.rm = TRUE),
+    n = n(),
+    .groups = "drop"
+  )
+
+filter(summary_stats_theta_D, scenario == "S1") %>%
     print(width = Inf)
 
-filter(summary_stats, scenario == "S1_null") %>%
+filter(summary_stats_theta_D, scenario == "S2") %>%
   print(width = Inf)
 
-filter(summary_stats, scenario == "S2") %>%
+filter(summary_stats_theta_D, scenario == "S3") %>%
   print(width = Inf)
 
-filter(summary_stats, scenario == "S2_null") %>%
+filter(summary_stats_theta_D, scenario == "S4") %>%
   print(width = Inf)
 
-filter(summary_stats, scenario == "S3") %>%
+filter(summary_stats_theta_D, scenario == "S5") %>%
   print(width = Inf)
 
-filter(summary_stats, scenario == "S4") %>%
+filter(summary_stats_theta_D, scenario == "S6") %>%
   print(width = Inf)
 
-filter(summary_stats, scenario == "S5") %>%
+filter(summary_stats_theta_D, scenario == "S7") %>%
   print(width = Inf)
 
-write_csv(summary_stats, file.path(results_dir, "summary_stats.csv"))
+filter(summary_stats_theta_D, scenario == "S8") %>%
+  print(width = Inf)
+
+filter(summary_stats_theta_D, scenario == "S9") %>%
+  print(width = Inf)
 
 # -----------------------------
 # Plots
