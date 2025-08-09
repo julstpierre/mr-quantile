@@ -6,7 +6,7 @@ sim_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(theta_1 = 0.2, theta_2 = 0, theta_3 = -1, nclust = 1, p = 50, h2 = 0.30, n = 50000)
+  # args <- list(theta_1 = 0.2, theta_2 = 0.8, theta_3 = -1, nclust = 1, p = 50, h2 = 0.30, n = 50000)
   n <- args$n
   theta_1 <- args$theta_1
   theta_3 <- args$theta_3
@@ -18,11 +18,11 @@ sim_dat <- function(args){
     theta_2 <- rep(args$theta_2, p)
   } else if (nclust == 4){
       if (p == 30){
-        theta_2 <- rep(c(args$theta_2, -0.4, 0.8, 0), times = c(12, 6, 6, 6))
+        theta_2 <- rep(c(args$theta_2, -0.4, 0, 0.4), times = c(12, 6, 6, 6))
       } else if (p == 50){
-        theta_2 <- rep(c(args$theta_2, -0.4, 0.8, 0), times = c(20, 12, 10, 8))
+        theta_2 <- rep(c(args$theta_2, -0.4, 0, 0.4), times = c(20, 12, 10, 8))
       } else if (p == 100){
-        theta_2 <- rep(c(args$theta_2, -0.4, 0.8, 0), times = c(45, 20, 20, 15))
+        theta_2 <- rep(c(args$theta_2, -0.4, 0, 0.4), times = c(45, 20, 20, 15))
       }
   }
   
@@ -460,7 +460,7 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 7, post_hoc = "mean
   
 }
 
-fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 7, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
+fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 8, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
   
   n <- length(D$beta_hat_y)
   if (is.null(max_clusters)) { max_clusters <- n/2 }

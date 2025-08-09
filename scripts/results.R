@@ -52,6 +52,7 @@ all_results <- map_dfr(all_files, read_and_expand) %>%
 summary_stats_theta_T <- all_results %>%
   group_by(scenario, method) %>%
   summarise(
+    theta_T = mean(theta_T_true),
     mean = mean(theta_T_hat, na.rm = TRUE),
     bias = mean(theta_T_hat - theta_T_true, na.rm = TRUE),
     sd = sd(theta_T_hat, na.rm = TRUE),
@@ -66,6 +67,7 @@ summary_stats_theta_T <- all_results %>%
 summary_stats_theta_D <- all_results %>%
   group_by(scenario, method) %>%
   summarise(
+    theta_D = mean(theta_D_true),
     mean = mean(theta_D_hat, na.rm = TRUE),
     bias = mean(theta_D_hat - theta_D_true, na.rm = TRUE),
     sd = sd(theta_D_hat, na.rm = TRUE),
@@ -77,31 +79,31 @@ summary_stats_theta_D <- all_results %>%
     .groups = "drop"
   )
 
-filter(summary_stats_theta_D, scenario == "S1") %>%
+filter(summary_stats_theta_T, scenario == "S1") %>%
     print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S2") %>%
+filter(summary_stats_theta_T, scenario == "S2") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S3") %>%
+filter(summary_stats_theta_T, scenario == "S3") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S4") %>%
+filter(summary_stats_theta_T, scenario == "S4") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S5") %>%
+filter(summary_stats_theta_T, scenario == "S5") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S6") %>%
+filter(summary_stats_theta_T, scenario == "S6") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S7") %>%
+filter(summary_stats_theta_T, scenario == "S7") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S8") %>%
+filter(summary_stats_theta_T, scenario == "S8") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S9") %>%
+filter(summary_stats_theta_T, scenario == "S9") %>%
   print(width = Inf)
 
 # -----------------------------
