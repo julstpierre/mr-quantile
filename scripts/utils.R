@@ -15,12 +15,12 @@ sim_dat <- function(args){
   h2 <- args$h2
   
   if (nclust == 1){
-    theta_2 <- rep(args$theta_2, p)
+    theta_2 <- 1.5 * rep(args$theta_2, p)
   } else if (nclust == 4){
       if (p == 30){
         theta_2 <- rep(c(args$theta_2, -0.4, 0, 0.4), times = c(12, 6, 6, 6))
       } else if (p == 50){
-        theta_2 <- rep(c(args$theta_2, -0.4, 0, 0.4), times = c(20, 12, 10, 8))
+        theta_2 <- rep(1.5 * c(args$theta_2, -0.4, 0, 0.4), times = c(20, 12, 10, 8))
       } else if (p == 100){
         theta_2 <- rep(c(args$theta_2, -0.4, 0, 0.4), times = c(45, 20, 20, 15))
       }
