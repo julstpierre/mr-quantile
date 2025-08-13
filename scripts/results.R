@@ -22,9 +22,10 @@ if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 # -----------------------------
 # Scenario metadata
 # -----------------------------
+theta_2 <- c(0, 0.8)
 scenario_metadata <- tibble(
   scenario = paste0("S", 1:9),
-  theta_D_true = c(0, 0.8, 0, 0.8, 0, 0.8, 0.8, 0.8, 0.8),
+  theta_D_true = c(rep(theta_2, 3), rep(theta_2[2], 3)),
   theta_T_true = theta_D_true + c(-1, -1, 0, 0, 1, 1, -1, 0, 1) * 0.2
 )
 
