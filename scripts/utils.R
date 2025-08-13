@@ -170,8 +170,12 @@ fit_ivw <- function(D, snps = 1:D$p){
   theta_T <- theta_ivw(D, snps)
   theta_D <- theta_mvivw(D, snps)
   theta <- cbind(
-          theta_T_hat = theta_T[,"Estimate"], theta_T_se = theta_T[,"StdError"],
-          theta_D_hat = theta_D[,"Estimate"], theta_D_se = theta_D[,"StdError"]
+          theta_T_hat = theta_T[,"Estimate"], theta_T_se = theta_T[,"StdError"], 
+          theta_T_lcl = theta_T[,"Estimate"] - qt(0.975, df = length(snps) - 1) * theta_T[,"StdError"],
+          theta_T_ucl = theta_T[,"Estimate"] + qt(0.975, df = length(snps) - 1) * theta_T[,"StdError"],
+          theta_D_hat = theta_D[,"Estimate"], theta_D_se = theta_D[,"StdError"],
+          theta_D_lcl = theta_D[,"Estimate"] - qt(0.975, df = length(snps) - 1) * theta_D[,"StdError"],
+          theta_D_ucl = theta_D[,"Estimate"] + qt(0.975, df = length(snps) - 1) * theta_D[,"StdError"]
         )
   row.names(theta) <- NULL
   return(theta)
@@ -200,8 +204,12 @@ fit_egger <- function(D, snps = 1:D$p){
   theta_T <- theta_egger(D, snps)
   theta_D <- theta_mvegger(D, snps)
   theta <- cbind(
-    theta_T_hat = theta_T[,"Estimate"], theta_T_se = theta_T[,"StdError"],
-    theta_D_hat = theta_D[,"Estimate"], theta_D_se = theta_D[,"StdError"]
+    theta_T_hat = theta_T[,"Estimate"], theta_T_se = theta_T[,"StdError"], 
+    theta_T_lcl = theta_T[,"Estimate"] - qt(0.975, df = length(snps) - 1) * theta_T[,"StdError"],
+    theta_T_ucl = theta_T[,"Estimate"] + qt(0.975, df = length(snps) - 1) * theta_T[,"StdError"],
+    theta_D_hat = theta_D[,"Estimate"], theta_D_se = theta_D[,"StdError"],
+    theta_D_lcl = theta_D[,"Estimate"] - qt(0.975, df = length(snps) - 1) * theta_D[,"StdError"],
+    theta_D_ucl = theta_D[,"Estimate"] + qt(0.975, df = length(snps) - 1) * theta_D[,"StdError"]
   )
   row.names(theta) <- NULL
   return(theta)
@@ -210,44 +218,26 @@ fit_egger <- function(D, snps = 1:D$p){
 #--------------------------------------------------------------------------------
 # Fit MR_Median on simulated data
 #--------------------------------------------------------------------------------
-theta_median <- function(D, snps = 1:D$p, boot_rep = 1000){
-    p <- length(snps)
-    theta_Median <- rq(D$beta_hat_y[snps]~-1+D$beta_hat_x[snps], weights = D$sigma2_y[snps]^-1)$coefficients[1]
-    names(theta_Median)[1] <- "Estimate"
-    theta_Median["StdError"] <- replicate(boot_rep, {
-      # beta_hat_y_k <- rnorm(p, D$beta_hat_y[snps], sqrt(D$sigma2_y[snps]))
-      # beta_hat_x_k <- rnorm(p, D$beta_hat_x[snps], sqrt(D$sigma2_x[snps]))
-      # rq(beta_hat_y_k~-1+beta_hat_x_k, weights = D$sigma2_y[snps]^-1)$coefficients[1]
-      idx <- sample(snps, length(snps), replace = TRUE)
-      rq(D$beta_hat_y[idx]~-1+D$beta_hat_x[idx], weights = D$sigma2_y[idx]^-1)$coefficients[1]
-    }) %>% sd()
-    theta_Median["Pvalue"] <- min(1, 2*pt(q=abs(theta_Median["Estimate"] / theta_Median["StdError"]), df = p-1, lower.tail = FALSE))
-    return(rbind(theta_Median))
+theta_median <- function(D, snps = 1:D$p){
+    MR_Median <- summary(rq(D$beta_hat_y[snps]~-1+D$beta_hat_x[snps], weights = D$sigma2_y[snps]^-1), se = "boot")$coef
+    return(cbind("Estimate" = MR_Median[1], "StdError" = MR_Median[2], "Pvalue" = MR_Median[4]))
 }
 
-theta_mvmedian <- function(D, snps = 1:D$p, boot_rep = 1000){
-  p <- length(snps)
-  theta_Median <- rq(D$beta_hat_y[snps]~-1+D$beta_hat_x[snps] + D$beta_hat_m[snps], weights = D$sigma2_y[snps]^-1)$coefficients[1]
-  names(theta_Median)[1] <- "Estimate"
-  rho <- cor(D$beta_hat_x[snps], D$beta_hat_m[snps])
-  theta_Median["StdError"] <- replicate(boot_rep, {
-    # beta_hat_y_k <- rnorm(p, D$beta_hat_y[snps], sqrt(D$sigma2_y[snps]))
-    # beta_hat_x_k <- rnorm(p, D$beta_hat_x[snps], sqrt(D$sigma2_x[snps]))
-    # beta_hat_m_k <- rnorm(p, D$beta_hat_m[snps] + rho * sqrt(D$sigma2_m[snps]) / sqrt(D$sigma2_x[snps]) * (beta_hat_x_k - D$beta_hat_x[snps]), sqrt((1 - rho^2) * D$sigma2_m[snps]))
-    # rq(beta_hat_y_k~-1+beta_hat_x_k+beta_hat_m_k, weights = D$sigma2_y[snps]^-1)$coefficients[1]
-    idx <- sample(snps, length(snps), replace = TRUE)
-    rq(D$beta_hat_y[idx]~-1+D$beta_hat_x[idx]+D$beta_hat_m[idx], weights = D$sigma2_y[idx]^-1)$coefficients[1]
-  }) %>% sd()
-  theta_Median["Pvalue"] <- min(1, 2*pt(q=abs(theta_Median["Estimate"] / theta_Median["StdError"]), df = p-1, lower.tail = FALSE))
-  return(rbind(theta_Median))
+theta_mvmedian <- function(D, snps = 1:D$p){
+  MR_Median <- summary(rq(D$beta_hat_y[snps]~-1+D$beta_hat_x[snps] + D$beta_hat_m[snps], weights = D$sigma2_y[snps]^-1), se = "boot")$coef[1, ]
+  return(cbind("Estimate" = unname(MR_Median[1]), "StdError" = unname(MR_Median[2]), "Pvalue" = unname(MR_Median[4])))
 }
 
 fit_median <- function(D, snps = 1:D$p){
   theta_T <- theta_median(D, snps)
   theta_D <- theta_mvmedian(D, snps)
   theta <- cbind(
-    theta_T_hat = theta_T[,"Estimate"], theta_T_se = theta_T[,"StdError"],
-    theta_D_hat = theta_D[,"Estimate"], theta_D_se = theta_D[,"StdError"]
+    theta_T_hat = theta_T[,"Estimate"], theta_T_se = theta_T[,"StdError"], 
+    theta_T_lcl = theta_T[,"Estimate"] - qt(0.975, df = length(snps) - 1) * theta_T[,"StdError"],
+    theta_T_ucl = theta_T[,"Estimate"] + qt(0.975, df = length(snps) - 1) * theta_T[,"StdError"],
+    theta_D_hat = theta_D[,"Estimate"], theta_D_se = theta_D[,"StdError"],
+    theta_D_lcl = theta_D[,"Estimate"] - qt(0.975, df = length(snps) - 1) * theta_D[,"StdError"],
+    theta_D_ucl = theta_D[,"Estimate"] + qt(0.975, df = length(snps) - 1) * theta_D[,"StdError"]
   )
   return(theta)
 }
@@ -434,11 +424,7 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 7, post_hoc = "mean
   }
   
   # Find cluster with the most number of SNPs
-  if ("3" %in% which(table(cluster) == max(table(cluster)))) {
-    main_cluster <- 3
-  } else {
-    main_cluster <- table(cluster) |> which.max() |> names() |> as.numeric()
-  }
+  main_cluster <- table(cluster) |> which.max() |> names() |> as.numeric()
   snps <- which(cluster == main_cluster)
   
   # Fit IVW or median estimator on main cluster
@@ -512,7 +498,8 @@ fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 8, post_hoc = "me
       theta_hat = round(genlasso.fit$beta[-1, which.min(ebic[df < max_clusters])], 4),
       ebic = min(ebic[df < max_clusters]),
       ord = ord,
-      ratios = ridge.ratios
+      ratios = ridge.ratios, 
+      sigma = unname(sqrt((rss / (n - df))[which.min(ebic[df < max_clusters])]))
     )
   }
   

@@ -24,8 +24,9 @@ if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 # -----------------------------
 scenario_metadata <- tibble(
   scenario = paste0("S", 1:9),
-  theta_D_true = c(0, 0.4, 0, 0.4, 0, 0.4, 0.4, 0.4, 0.4),
-  theta_T_true = c(-0.2, 0.2, 0, 0.4, 0.2, 0.6, 0.2, 0.4, 0.6)
+  theta_D_true = c(0, 0.8, 0, 0.8, 0, 0.8, 0.8, 0.8, 0.8),
+  theta_T_true = theta_D_true + c(-1, -1, 0, 0, 1, 1, -1, 0, 1) * 0.2,
+  p = 50
 )
 
 # -----------------------------
@@ -42,9 +43,7 @@ read_and_expand <- function(path) {
 all_results <- map_dfr(all_files, read_and_expand) %>%
   mutate(scenario = str_extract(source_file, "S\\d+(_null)?")) %>%
   left_join(scenario_metadata, by = "scenario") %>%
-  select(-source_file) %>% 
-  mutate(theta_T_lcl = theta_T_hat - 1.96 * theta_T_se, theta_T_ucl = theta_T_hat + 1.96 * theta_T_se) %>%
-  mutate(theta_D_lcl = theta_D_hat - 1.96 * theta_D_se, theta_D_ucl = theta_D_hat + 1.96 * theta_D_se)
+  select(-source_file)
 
 # -----------------------------
 # Summary statistics
@@ -79,31 +78,31 @@ summary_stats_theta_D <- all_results %>%
     .groups = "drop"
   )
 
-filter(summary_stats_theta_T, scenario == "S1") %>%
+filter(summary_stats_theta_D, scenario == "S1") %>%
     print(width = Inf)
 
-filter(summary_stats_theta_T, scenario == "S2") %>%
+filter(summary_stats_theta_D, scenario == "S2") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_T, scenario == "S3") %>%
+filter(summary_stats_theta_D, scenario == "S3") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_T, scenario == "S4") %>%
+filter(summary_stats_theta_D, scenario == "S4") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_T, scenario == "S5") %>%
+filter(summary_stats_theta_D, scenario == "S5") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_T, scenario == "S6") %>%
+filter(summary_stats_theta_D, scenario == "S6") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_T, scenario == "S7") %>%
+filter(summary_stats_theta_D, scenario == "S7") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_T, scenario == "S8") %>%
+filter(summary_stats_theta_D, scenario == "S8") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_T, scenario == "S9") %>%
+filter(summary_stats_theta_D, scenario == "S9") %>%
   print(width = Inf)
 
 # -----------------------------
