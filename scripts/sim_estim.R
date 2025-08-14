@@ -45,7 +45,9 @@ chunk <- D[start_idx:end_idx]
 res_ivw         <- lapply(chunk, fit_ivw) %>% do.call(rbind.data.frame, .)
 res_median      <- lapply(chunk, fit_median) %>% do.call(rbind.data.frame, .)
 res_mrclust     <- lapply(chunk, fit_mvmrclust) %>% do.call(rbind.data.frame, .)
-res_fused_lasso <- lapply(chunk, fit_mvfused_lasso) %>% do.call(rbind.data.frame, .)
+res_fused_lasso_0 <- lapply(chunk, fit_mvfused_lasso, ebic_coef = 0) %>% do.call(rbind.data.frame, .)
+res_fused_lasso_05 <- lapply(chunk, fit_mvfused_lasso, ebic_coef = 0.5) %>% do.call(rbind.data.frame, .)
+res_fused_lasso_1 <- lapply(chunk, fit_mvfused_lasso, ebic_coef = 1) %>% do.call(rbind.data.frame, .)
 
 # -----------------------------
 # Combine results into a single data frame and add a column for the model
@@ -59,7 +61,9 @@ res_all <- bind_rows(
   tag_method(res_ivw, "ivw")
   ,tag_method(res_median, "median")
   ,tag_method(res_mrclust, "mrclust")
-  ,tag_method(res_fused_lasso, "fused_lasso")
+  ,tag_method(res_fused_lasso_0, "res_fused_lasso_0")
+  ,tag_method(res_fused_lasso_05, "res_fused_lasso_05")
+  ,tag_method(res_fused_lasso_1, "res_fused_lasso_1")
 )
 
 # -----------------------------

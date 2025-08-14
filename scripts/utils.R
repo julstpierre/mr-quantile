@@ -57,7 +57,7 @@ sim_indv_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(theta_1 = 0.2, theta_2 = 0, theta_3 = -1, nclust = 4, p = 50, h2 = 0.10, n = 50000)
+  # args <- list(theta_1 = 0.2, theta_2 = 0, theta_3 = -1, nclust = 4, p = 50, h2 = 0.10, n = 10000)
   n <- args$n
   theta_1 <- args$theta_1
   theta_3 <- args$theta_3
@@ -113,7 +113,7 @@ sim_indv_dat <- function(args){
   gamma <- delta_w %*% delta_x
   alpha <- gamma * (theta_2 - theta_2[1])
   delta_y <- qr.solve(delta_w, alpha)
-  Y <- theta_2[1] * X + W %*% delta_y + theta_3 * M + U + epsilon_y 
+  Y <- theta_2[1] * X + W %*% delta_y + theta_3 * M + U + epsilon_y
   
   # Summary stats for X
   sampX = seq(1, n)
@@ -291,6 +291,7 @@ fit_median <- function(D, snps = 1:D$p){
     theta_D_lcl = theta_D[,"Estimate"] - qt(0.975, df = length(snps) - 1) * theta_D[,"StdError"],
     theta_D_ucl = theta_D[,"Estimate"] + qt(0.975, df = length(snps) - 1) * theta_D[,"StdError"]
   )
+  row.names(theta) <- NULL
   return(theta)
 }
 
@@ -319,13 +320,9 @@ fit_mrclust <- function(D){
             pull(rows) %>%
             as.numeric()
     
-    # Fit IVW or median estimator on main cluster
+    # Fit median estimator on main cluster
     nclust <- length(unique(res_em_best$cluster))
-    if (nclust == 1) {
-      theta_main <- theta_ivw(D)
-    } else {
-      theta_main <- theta_median(D, snps)
-    }
+    theta_main <- theta_median(D, snps)
     
     return(
       cbind(
@@ -362,13 +359,9 @@ fit_mvmrclust <- function(D){
     pull(rows) %>%
     as.numeric()
   
-  # Fit IVW or median estimator on main cluster
+  # Fit median estimator on main cluster
   nclust <- length(unique(res_em_best$cluster))
-  if (nclust == 1) {
-    theta_main <- fit_ivw(D)
-  } else {
-    theta_main <- fit_median(D, snps)
-  }
+  theta_main <- theta_median(D, snps)
   
   return(
     cbind(
@@ -383,7 +376,7 @@ fit_mvmrclust <- function(D){
 #--------------------------------------------------------------------------------
 # Fit generalized fused lasso on simulated data
 #--------------------------------------------------------------------------------
-fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 7, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
+fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
   
   n <- length(D$beta_hat_y)
   if (is.null(max_clusters)) { max_clusters <- n/2 }
@@ -479,13 +472,9 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 7, post_hoc = "mean
   main_cluster <- table(cluster) |> which.max() |> names() |> as.numeric()
   snps <- which(cluster == main_cluster)
   
-  # Fit IVW or median estimator on main cluster
+  # Fit median estimator on main cluster
   nclust <- length(unique(cluster))
-  if (nclust == 1) {
-    theta_main <- theta_ivw(D)
-  } else {
-    theta_main <- theta_median(D, snps)
-  }
+  theta_main <- theta_median(D, snps)
   
   return(
     cbind(
@@ -498,7 +487,7 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 7, post_hoc = "mean
   
 }
 
-fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 8, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
+fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
   
   n <- length(D$beta_hat_y)
   if (is.null(max_clusters)) { max_clusters <- n/2 }
@@ -596,13 +585,9 @@ fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 8, post_hoc = "me
   main_cluster <- table(cluster) |> which.max() |> names() |> as.numeric()
   snps <- which(cluster == main_cluster)
   
-  # Fit IVW or median estimator on main cluster
+  # Fit median estimator on main cluster
   nclust <- length(unique(cluster))
-  if (nclust == 1) {
-    theta_main <- fit_ivw(D)
-  } else {
-    theta_main <- fit_median(D, snps)
-  }
+  theta_main <- theta_median(D, snps)
   
   return(
     cbind(

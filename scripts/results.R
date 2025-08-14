@@ -22,11 +22,20 @@ if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 # -----------------------------
 # Scenario metadata
 # -----------------------------
-theta_2 <- c(0, 0.8)
+params <- expand.grid(
+  p = 50,
+  theta_1 = c(0.2),
+  theta_2 = c(0, 0.8),
+  theta_3 = c(-1, 1),
+  nclust = c(1, 4),
+  n = 10000,
+  h2 = 0.10
+)
+
 scenario_metadata <- tibble(
-  scenario = paste0("S", 1:9),
-  theta_D_true = c(rep(theta_2, 3), rep(theta_2[2], 3)),
-  theta_T_true = theta_D_true + c(-1, -1, 0, 0, 1, 1, -1, 0, 1) * 0.2
+  scenario = paste0("S", 1:8),
+  theta_D_true = params$theta_2,
+  theta_T_true = params$theta_2 + params$theta_1 * params$theta_3
 )
 
 # -----------------------------
@@ -100,9 +109,6 @@ filter(summary_stats_theta_D, scenario == "S7") %>%
   print(width = Inf)
 
 filter(summary_stats_theta_D, scenario == "S8") %>%
-  print(width = Inf)
-
-filter(summary_stats_theta_D, scenario == "S9") %>%
   print(width = Inf)
 
 # -----------------------------
