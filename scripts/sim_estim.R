@@ -29,7 +29,10 @@ end_idx       <- as.numeric(args[3])  # e.g., 200
 # -----------------------------
 # Load simulation data
 # -----------------------------
-load("../data/simulations/sim_indv_dat.R")  # Loads D_S1_null, D_S1, ..., D_S4
+for (f in paste0("D_S", 1:8, ".RData")) {
+  load(paste0("../data/simulations/", f))
+  rm(f)
+}
 D <- get(scenario_name)                # Extract the dataset corresponding to scenario_name
 
 # Safety check for indexing

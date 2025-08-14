@@ -71,4 +71,8 @@ D_S8 <- filter(params, theta_2 == 0.8, theta_3 == 1, nclust == 4) %>%
   mclapply(mc.cores = num_jobs, sim_indv_dat, mc.set.seed = TRUE)
 
 # Save simulated data
-save(D_S1, D_S2, D_S3, D_S4, D_S5, D_S6, D_S7, D_S8, file = '../data/simulations/sim_indv_dat.R')
+for (d in paste0("D_S", 1:8)) {
+  save(list = d,
+       file = paste0("../data/simulations/", d, ".RData")
+       )
+}
