@@ -145,9 +145,9 @@ sim_indv_dat <- function(args){
   residuals2 <- colSums((matrix(Yc, n, p) - Gc * rep(beta_hat_y, each = n))^2)
   sigma2_y <- residuals2 / (n - 2) / GtG
   
-  return(list("beta_hat_x" = beta_hat_x, 
+  return(list("beta_hat_x" = as.vector(beta_hat_x), 
               "sigma2_x" = sigma2_x, 
-              "beta_hat_y" = beta_hat_y, 
+              "beta_hat_y" = as.vector(beta_hat_y), 
               "sigma2_y" = sigma2_y, 
               "beta_hat_m" = beta_hat_m, 
               "sigma2_m" = sigma2_m,
@@ -298,7 +298,7 @@ fit_median <- function(D, snps = 1:D$p){
 # Fit MR_Clust on simulated data
 #--------------------------------------------------------------------------------
 fit_mrclust <- function(D){
-    ratios <- D$beta_hat_y / D$beta_hat_x
+    ratios <- as.vector(D$beta_hat_y / D$beta_hat_x)
     ratios.se <- sqrt(D$sigma2_y) / abs(D$beta_hat_x)
     res_em <- mr_clust_em(theta = ratios, 
                           theta_se = ratios.se, 
@@ -341,7 +341,7 @@ fit_mvmrclust <- function(D){
   fit <- lm(D$beta_hat_y ~ D$beta_hat_m, weights = D$sigma2_y^-1)
   resid.y <- residuals(fit)
   resid.se <- sqrt(D$sigma2_y * (1 - hatvalues(fit)))
-  ratios <- resid.y / D$beta_hat_x
+  ratios <- as.vector(resid.y / D$beta_hat_x)
   ratios.se <- resid.se / abs(D$beta_hat_x)
   res_em <- mr_clust_em(theta = ratios, 
                         theta_se = ratios.se, 
@@ -503,7 +503,7 @@ fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 8, post_hoc = "me
   n <- length(D$beta_hat_y)
   if (is.null(max_clusters)) { max_clusters <- n/2 }
   y <- D$beta_hat_y/sqrt(D$sigma2_y)
-  X <- diag(D$beta_hat_x/sqrt(D$sigma2_y))
+  X <- diag(as.vector(D$beta_hat_x/sqrt(D$sigma2_y)))
   M <- D$beta_hat_m/sqrt(D$sigma2_y)
     
   # For each pair (i, j), we want a row with 1 at position i, -1 at position j
