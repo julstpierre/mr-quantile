@@ -361,7 +361,7 @@ fit_mvmrclust <- function(D){
   
   # Fit median estimator on main cluster
   nclust <- length(unique(res_em_best$cluster))
-  theta_main <- theta_median(D, snps)
+  theta_main <- fit_median(D, snps)
   
   return(
     cbind(
@@ -587,7 +587,7 @@ fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "me
   
   # Fit median estimator on main cluster
   nclust <- length(unique(cluster))
-  theta_main <- theta_median(D, snps)
+  theta_main <- fit_median(D, snps)
   
   return(
     cbind(

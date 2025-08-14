@@ -52,13 +52,27 @@ read_and_expand <- function(path) {
 all_results <- map_dfr(all_files, read_and_expand) %>%
   mutate(scenario = str_extract(source_file, "S\\d+(_null)?")) %>%
   left_join(scenario_metadata, by = "scenario") %>%
-  select(-source_file)
+  select(-source_file) %>%
+  mutate(
+    ebic = if_else(
+      str_detect(method, "^res_fused_lasso_"),
+      str_replace(method, "^res_fused_lasso_", "") %>%
+        str_replace("^0(\\d)$", "0.\\1") %>%   # turn 05 into 0.5, 01 into 0.1, etc.
+        as.numeric(),
+      NA_real_
+    ),
+    method = if_else(
+      str_detect(method, "^res_fused_lasso_"),
+      "res_fused_lasso",
+      method
+    )
+  )
 
 # -----------------------------
 # Summary statistics
 # -----------------------------
 summary_stats_theta_T <- all_results %>%
-  group_by(scenario, method) %>%
+  group_by(scenario, method, ebic) %>%
   summarise(
     theta_T = mean(theta_T_true),
     mean = mean(theta_T_hat, na.rm = TRUE),
@@ -73,7 +87,7 @@ summary_stats_theta_T <- all_results %>%
   )
 
 summary_stats_theta_D <- all_results %>%
-  group_by(scenario, method) %>%
+  group_by(scenario, method, ebic) %>%
   summarise(
     theta_D = mean(theta_D_true),
     mean = mean(theta_D_hat, na.rm = TRUE),
