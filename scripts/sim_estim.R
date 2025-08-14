@@ -29,7 +29,7 @@ end_idx       <- as.numeric(args[3])  # e.g., 200
 # -----------------------------
 # Load simulation data
 # -----------------------------
-load("../data/simulations/sim_dat.R")  # Loads D_S1_null, D_S1, ..., D_S4
+load("../data/simulations/sim_indv_dat.R")  # Loads D_S1_null, D_S1, ..., D_S4
 D <- get(scenario_name)                # Extract the dataset corresponding to scenario_name
 
 # Safety check for indexing
@@ -40,7 +40,6 @@ chunk <- D[start_idx:end_idx]
 # Run all MR methods
 # -----------------------------
 res_ivw         <- lapply(chunk, fit_ivw) %>% do.call(rbind.data.frame, .)
-res_egger       <- lapply(chunk, fit_egger) %>% do.call(rbind.data.frame, .)
 res_median      <- lapply(chunk, fit_median) %>% do.call(rbind.data.frame, .)
 res_mrclust     <- lapply(chunk, fit_mvmrclust) %>% do.call(rbind.data.frame, .)
 res_fused_lasso <- lapply(chunk, fit_mvfused_lasso) %>% do.call(rbind.data.frame, .)
@@ -55,7 +54,6 @@ tag_method <- function(res_list, method) {
 
 res_all <- bind_rows(
   tag_method(res_ivw, "ivw")
-  ,tag_method(res_egger, "egger")
   ,tag_method(res_median, "median")
   ,tag_method(res_mrclust, "mrclust")
   ,tag_method(res_fused_lasso, "fused_lasso")

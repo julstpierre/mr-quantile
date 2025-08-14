@@ -6,7 +6,7 @@ sim_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(theta_1 = 0.2, theta_2 = 0.8, theta_3 = -1, nclust = 1, p = 50, h2 = 0.30, n = 50000)
+  # args <- list(theta_1 = 0.2, theta_2 = 0, theta_3 = -1, nclust = 4, p = 50, h2 = 0.10, n = 50000)
   n <- args$n
   theta_1 <- args$theta_1
   theta_3 <- args$theta_3
@@ -57,61 +57,63 @@ sim_indv_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(beta = 0.4, nclust = 4, p = 100, h2 = 0.30, n = 50000, theta_M = 0)
+  # args <- list(theta_1 = 0.2, theta_2 = 0, theta_3 = -1, nclust = 4, p = 50, h2 = 0.10, n = 50000)
   n <- args$n
-  beta <- args$beta
+  theta_1 <- args$theta_1
+  theta_3 <- args$theta_3
   nclust <- args$nclust
   p <- args$p
   h2 <- args$h2
-  theta_M <- args$theta_M
   
   if (nclust == 1){
-    theta_D <- rep(beta, p)
-  } else if (nclust == 4){
+    theta_2 <- rep(args$theta_2, p)
+  } else {
     if (p == 30){
-      theta_D <- rep(c(beta, -0.4, 0.8, 0), times = c(12, 6, 6, 6))
+      theta_2 <- rep(c(args$theta_2, -0.4, 0.8 - args$theta_2, 0.4), times = c(12, 6, 6, 6))
+    } else if (p == 50){
+      theta_2 <- rep(c(args$theta_2, -0.4, 0.8 - args$theta_2, 0.4), times = c(20, 10, 10, 10))
     } else if (p == 100){
-      theta_D <- rep(c(beta, -0.4, 0.8, 0), times = c(45, 20, 20, 15))
+      theta_2 <- rep(c(args$theta_2, -0.4, 0.8 - args$theta_2, 0.4), times = c(45, 20, 20, 15))
     }
   }
   
   # Simulate genetic data and confounders
   maf <- runif(p, 0.05, 0.5)
-  G <- sapply(maf, function(maf) rbinom(2 * n, 2, maf))
-  U <- rnorm(2 * n)
-  epsilon_w <- mvrnorm(2 * n, mu = rep(0, nclust), Sigma = diag(1, nclust))
-  epsilon_x <- rnorm(2 * n)
-  epsilon_m <- rnorm(2 * n)
-  epsilon_y <- rnorm(2 * n)
+  G <- sapply(maf, function(maf) rbinom(n, 2, maf))
+  U <- rnorm(n)
+  epsilon_w <- mvrnorm(n, mu = rep(0, nclust), Sigma = diag(1, nclust))
+  epsilon_x <- rnorm(n)
+  epsilon_m <- rnorm(n)
+  epsilon_y <- rnorm(n)
   
-  # Simulate latent factors with 50% of variance explained by genetic predictors
-  delta_W <- mvrnorm(p, mu = rep(0.2, nclust), Sigma = diag(0.1^2, nclust)) * sapply(1:nclust, function(i) theta_D == unique(theta_D)[i])
-  h2_w <- 0.5
-  scaling_factors <- sqrt( h2_w / (1 - h2_w) * apply(epsilon_w, 2, var) / apply(G %*% delta_W, 2, var))
+  # Simulate latent factors with 20% of variance explained by genetic predictors
+  delta_w <- mvrnorm(p, mu = rep(0.2, nclust), Sigma = diag(0.1^2, nclust)) * sapply(1:nclust, function(i) theta_2 == unique(theta_2)[i])
+  h2_w <- 0.2
+  scaling_factors <- sqrt( h2_w / (1 - h2_w) * apply(epsilon_w, 2, var) / apply(G %*% delta_w, 2, var))
   if (nclust == 1){
-    delta_W <- delta_W * scaling_factors
+    delta_w <- delta_w * scaling_factors
   } else {
-    delta_W <- delta_W %*% diag(scaling_factors)
+    delta_w <- delta_w %*% diag(scaling_factors)
   }
-  W <- G %*% delta_W + epsilon_w
+  W <- G %*% delta_w + epsilon_w
+  apply(G %*% delta_w, 2, var) / apply(W, 2, var) # ~0.2
   
-  # Simulate exposure with heritability equal to h2
-  delta_X <- runif(nclust, -1, 1)
-  phi <- h2 * ( var( U ) + var( epsilon_x ) ) / ( var( G %*% ( delta_W %*% delta_X ) ) - h2 * var( W %*% delta_X ) )
-  delta_X <- delta_X %*% sqrt(phi)
-  
-  X <- W %*% delta_X + U + epsilon_x
+  # Simulate exposure
+  delta_x <- runif(nclust, -1, 1)
+  phi <- h2 * ( var( U ) + var( epsilon_x ) ) / ( var( G %*% ( delta_w %*% delta_x ) ) - h2 * var( W %*% delta_x ) )
+  delta_x <- delta_x %*% sqrt(phi)
+  X <- W %*% delta_x + U + epsilon_x
+  var(G %*% delta_w %*% delta_x) / var(X) # ~0.1
   
   # Simulate mediator
-  delta_M <- rnorm(p, 0, 0.1)
-  M <- 0.25 * X + U + epsilon_m + G %*% delta_M
-    
-  # Simulate outcome
-  gamma <- delta_W %*% delta_X
-  alpha <- gamma * (theta_D - beta)
-  delta_y <- qr.solve(delta_W, alpha)
+  delta_m <- rnorm(p, mean = 0, sd = 0.1)
+  M <- theta_1 * X + U + epsilon_m + G %*% delta_m
   
-  Y <- X * beta + W %*% delta_y + M * theta_M + U + epsilon_y 
+  # Simulate outcome
+  gamma <- delta_w %*% delta_x
+  alpha <- gamma * (theta_2 - theta_2[1])
+  delta_y <- qr.solve(delta_w, alpha)
+  Y <- theta_2[1] * X + W %*% delta_y + theta_3 * M + U + epsilon_y 
   
   # Summary stats for X
   sampX = seq(1, n)
@@ -123,8 +125,18 @@ sim_indv_dat <- function(args){
   residuals2 <- colSums((matrix(Xc, n, p) - Gc * rep(beta_hat_x, each = n))^2)
   sigma2_x <- residuals2 / (n - 2) / GtG
   
+  # Summary stats for X
+  sampM = seq(1, n)
+  Gc <- scale(G[sampM, ], scale = FALSE)
+  Mc <- M[sampM] - mean(M[sampM])
+  XtG <- crossprod(Gc, Mc)            
+  GtG <- colSums(Gc^2)                   
+  beta_hat_m <- XtG / GtG
+  residuals2 <- colSums((matrix(Mc, n, p) - Gc * rep(beta_hat_m, each = n))^2)
+  sigma2_m <- residuals2 / (n - 2) / GtG
+  
   # Summary stats for Y
-  sampY <- seq(n + 1, 2 * n)
+  sampY <- seq(1, n)
   Yc <- Y[sampY] - mean(Y[sampY])
   Gc <- scale(G[sampY, ], scale = FALSE)
   XtG <- crossprod(Gc, Yc)
@@ -133,13 +145,14 @@ sim_indv_dat <- function(args){
   residuals2 <- colSums((matrix(Yc, n, p) - Gc * rep(beta_hat_y, each = n))^2)
   sigma2_y <- residuals2 / (n - 2) / GtG
   
-  return(list("beta_hat_x" = as.vector(beta_hat_x), 
+  return(list("beta_hat_x" = beta_hat_x, 
               "sigma2_x" = sigma2_x, 
-              "beta_hat_y" = as.vector(beta_hat_y), 
+              "beta_hat_y" = beta_hat_y, 
               "sigma2_y" = sigma2_y, 
-              "beta" = beta,
-              "theta_D" = theta_D,
-              "theta_M" = theta_M,
+              "beta_hat_m" = beta_hat_m, 
+              "sigma2_m" = sigma2_m,
+              "theta_T" = theta_2 + theta_1 * theta_3,
+              "theta_D" = theta_2,
               "nclust" = nclust,
               "p" = p,
               "maf" = maf
@@ -151,36 +164,75 @@ sim_indv_dat <- function(args){
 # Fit MR_IVW on simulated data
 #--------------------------------------------------------------------------------
 theta_ivw <- function(D, snps = 1:D$p){
-    MRInputObject = mr_input(bx = D$beta_hat_x[snps], bxse = sqrt(D$sigma2_x[snps]), by = D$beta_hat_y[snps], byse = sqrt(D$sigma2_y[snps]))
-    MR_IVW <- mr_ivw(MRInputObject)
-    return(cbind("Estimate" = unname(MR_IVW$Estimate[1]), "StdError" = unname(MR_IVW$StdError[1]), "Pvalue" = unname(MR_IVW$Pvalue[1])))
+
+  total.effect <- lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] - 1, weights = D$sigma2_y[snps]^-1)$coef[1]
+  resid.std.error <-summary(lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] - 1, weights = D$sigma2_y[snps]^-1))$sigma
+  se.total.effect <- summary(lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] - 1, weights = D$sigma2_y[snps]^-1))$coef[1,2]
+  ci.upper.total <- max(total.effect + qnorm(0.975) * se.total.effect / resid.std.error,
+                       total.effect + qt(0.975, df=length(snps)-1) * se.total.effect)
+  ci.lower.total <- min(total.effect - qnorm(0.975) * se.total.effect / resid.std.error,
+                       total.effect - qt(0.975, df=length(snps)-1) * se.total.effect)
+
+  return(cbind("Estimate" = total.effect, "StdError" = se.total.effect, "LCL" = ci.lower.total, "UCL" = ci.upper.total))
 }
 
 theta_mvivw <- function(D, snps = 1:D$p){
-  MRInputObject = mr_mvinput(bx = cbind(D$beta_hat_x[snps], D$beta_hat_m[snps]), 
-                             bxse = sqrt(cbind(D$sigma2_x[snps], D$sigma2_m[snps])), 
-                             by = D$beta_hat_y[snps], 
-                             byse = sqrt(D$sigma2_y[snps])
-  )
-  MR_IVW <- mr_mvivw(MRInputObject)
-  return(cbind("Estimate" = unname(MR_IVW$Estimate[1]), "StdError" = unname(MR_IVW$StdError[1]), "Pvalue" = unname(MR_IVW$Pvalue[1])))
+
+  direct.effect <- lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] + D$beta_hat_m[snps] - 1, weights = D$sigma2_y[snps]^-1)$coef[1]
+  resid.std.error <- summary(lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] - 1, weights = D$sigma2_y[snps]^-1))$sigma
+  se.direct.effect <- summary(lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] + D$beta_hat_m[snps] - 1, weights = D$sigma2_y[snps]^-1))$coef[1,2]
+  ci.upper.direct <- max(direct.effect + qnorm(0.975) * se.direct.effect / resid.std.error,
+                       direct.effect + qt(0.975, df=length(snps)-1) * se.direct.effect)
+  ci.lower.direct <- min(direct.effect - qnorm(0.975) * se.direct.effect / resid.std.error,
+                       direct.effect - qt(0.975, df=length(snps)-1) * se.direct.effect)
+
+  return(cbind("Estimate" = direct.effect, "StdError" = se.direct.effect, "LCL" = ci.lower.direct, "UCL" = ci.upper.direct))
 }
 
 fit_ivw <- function(D, snps = 1:D$p){
   theta_T <- theta_ivw(D, snps)
   theta_D <- theta_mvivw(D, snps)
   theta <- cbind(
-          theta_T_hat = theta_T[,"Estimate"], theta_T_se = theta_T[,"StdError"], 
-          theta_T_lcl = theta_T[,"Estimate"] - qt(0.975, df = length(snps) - 1) * theta_T[,"StdError"],
-          theta_T_ucl = theta_T[,"Estimate"] + qt(0.975, df = length(snps) - 1) * theta_T[,"StdError"],
+          theta_T_hat = theta_T[,"Estimate"], theta_T_se = theta_T[,"StdError"],
+          theta_T_lcl = theta_T[,"LCL"], theta_T_ucl = theta_T[,"UCL"],
           theta_D_hat = theta_D[,"Estimate"], theta_D_se = theta_D[,"StdError"],
-          theta_D_lcl = theta_D[,"Estimate"] - qt(0.975, df = length(snps) - 1) * theta_D[,"StdError"],
-          theta_D_ucl = theta_D[,"Estimate"] + qt(0.975, df = length(snps) - 1) * theta_D[,"StdError"]
+          theta_D_lcl = theta_D[,"LCL"], theta_D_ucl = theta_D[,"UCL"]
         )
   row.names(theta) <- NULL
   return(theta)
 }
-  
+
+# theta_ivw <- function(D, snps = 1:D$p){
+#   MRInputObject = mr_input(bx = D$beta_hat_x[snps], bxse = sqrt(D$sigma2_x[snps]), by = D$beta_hat_y[snps], byse = sqrt(D$sigma2_y[snps]))
+#   MR_IVW <- mr_ivw(MRInputObject)
+#   return(cbind("Estimate" = unname(MR_IVW$Estimate[1]), "StdError" = unname(MR_IVW$StdError[1]), "Pvalue" = unname(MR_IVW$Pvalue[1])))
+# }
+# 
+# theta_mvivw <- function(D, snps = 1:D$p){
+#   MRInputObject = mr_mvinput(bx = cbind(D$beta_hat_x[snps], D$beta_hat_m[snps]), 
+#                              bxse = sqrt(cbind(D$sigma2_x[snps], D$sigma2_m[snps])), 
+#                              by = D$beta_hat_y[snps], 
+#                              byse = sqrt(D$sigma2_y[snps])
+#   )
+#   MR_IVW <- mr_mvivw(MRInputObject)
+#   return(cbind("Estimate" = unname(MR_IVW$Estimate[1]), "StdError" = unname(MR_IVW$StdError[1]), "Pvalue" = unname(MR_IVW$Pvalue[1])))
+# }
+# 
+# fit_ivw <- function(D, snps = 1:D$p){
+#   theta_T <- theta_ivw(D, snps)
+#   theta_D <- theta_mvivw(D, snps)
+#   theta <- cbind(
+#     theta_T_hat = theta_T[,"Estimate"], theta_T_se = theta_T[,"StdError"], 
+#     theta_T_lcl = theta_T[,"Estimate"] - qt(0.975, df = length(snps) - 1) * theta_T[,"StdError"],
+#     theta_T_ucl = theta_T[,"Estimate"] + qt(0.975, df = length(snps) - 1) * theta_T[,"StdError"],
+#     theta_D_hat = theta_D[,"Estimate"], theta_D_se = theta_D[,"StdError"],
+#     theta_D_lcl = theta_D[,"Estimate"] - qt(0.975, df = length(snps) - 1) * theta_D[,"StdError"],
+#     theta_D_ucl = theta_D[,"Estimate"] + qt(0.975, df = length(snps) - 1) * theta_D[,"StdError"]
+#   )
+#   row.names(theta) <- NULL
+#   return(theta)
+# }
+
 #--------------------------------------------------------------------------------
 # Fit MR_Egger on simulated data
 #--------------------------------------------------------------------------------
