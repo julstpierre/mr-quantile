@@ -57,7 +57,7 @@ sim_indv_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(theta_1 = 0.2, theta_2 = 0, theta_3 = -1, nclust = 4, p = 50, h2 = 0.10, n = 10000)
+  # args <- list(theta_1 = 0.2, theta_2 = 0, theta_3 = -1, nclust = 1, p = 50, h2 = 0.10, n = 50000)
   n <- args$n
   theta_1 <- args$theta_1
   theta_3 <- args$theta_3
@@ -506,19 +506,19 @@ fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "me
   ) %>% as.matrix()
   
   # Apply a l2 regularization to the ratios
-  if (is.null(lambda_list)) { lambda_list <- seq(0, 4, 0.1) }
+  if (is.null(lambda_list)) { lambda_list <- sort(diag(X^2)) }
   results <- vector("list", length(lambda_list))
   
   for (i in seq_along(lambda_list)) {
     lambda <- lambda_list[i]
-    ytilde <- c(y, rep(0, n + 1))
-    Xtilde <- rbind(cbind(X, M), sqrt(lambda) * diag(n + 1))
+    ytilde <- c(y, rep(0, n))
+    Xtilde <- rbind(cbind(X, M), cbind(sqrt(lambda) * diag(n), matrix(0, n, 1)))
     ridge.ratios <- lm(ytilde ~ -1 + Xtilde)$coefficients[1:n] %>% as.vector()
     
     # Order data by regularized ratios
     ord <- order(ridge.ratios)
-    ytilde <- c(y[ord], rep(0, n + 1))
-    Xtilde <- rbind(cbind(M[ord], X[ord, ord]), sqrt(lambda) * diag(n + 1))
+    ytilde <- c(y[ord], rep(0, n))
+    Xtilde <- rbind(cbind(M[ord], X[ord, ord]), cbind(sqrt(lambda) * diag(n), matrix(0, n, 1)))
       
     # Compute adaptive weights using differences in ratios
     eps     <- 0    # stability constant
@@ -531,16 +531,16 @@ fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "me
     # Compute EBIC for each lambda
     rss <- colSums((genlasso.fit$fit[1:n, ] - ytilde[1:n])^2)
     df <- genlasso.fit$df  # effective degrees of freedom
-    ebic <- rss / n + log(n) * df / n + 2 * ebic_coef * log(choose(n, df)) / n
+    ebic <- rss / n + log(n) * df / n + 2 * ebic_coef * log(choose(n, df - 1)) / n
     
     # Return best fit
     results[[i]] <- list(
       lambda = lambda,
-      theta_hat = round(genlasso.fit$beta[-1, which.min(ebic[df < max_clusters])], 4),
-      ebic = min(ebic[df < max_clusters]),
+      theta_hat = round(genlasso.fit$beta[-1, which.min(ebic[df - 1 < max_clusters])], 4),
+      ebic = min(ebic[df - 1 < max_clusters]),
       ord = ord,
       ratios = ridge.ratios, 
-      sigma = unname(sqrt((rss / (n - df))[which.min(ebic[df < max_clusters])]))
+      sigma = unname(sqrt((rss / (n - df))[which.min(ebic[df - 1 < max_clusters])]))
     )
   }
   
