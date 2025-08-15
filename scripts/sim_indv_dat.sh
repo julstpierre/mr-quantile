@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=sim_indv_dat
 #SBATCH --array=1-8
-#SBATCH --time=03:00:00
-#SBATCH --mem=16G
+#SBATCH --time=01:00:00
+#SBATCH --mem=4G
 #SBATCH --cpus-per-task=6
 #SBATCH --output=../results/logs/%x_%A_%a.out
 

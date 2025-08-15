@@ -149,7 +149,7 @@ sim_indv_dat <- function(args){
               "sigma2_x" = sigma2_x, 
               "beta_hat_y" = as.vector(beta_hat_y), 
               "sigma2_y" = sigma2_y, 
-              "beta_hat_m" = beta_hat_m, 
+              "beta_hat_m" = as.vector(beta_hat_m), 
               "sigma2_m" = sigma2_m,
               "theta_T" = theta_2 + theta_1 * theta_3,
               "theta_D" = theta_2,
