@@ -506,7 +506,7 @@ fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "me
   ) %>% as.matrix()
   
   # Apply a l2 regularization to the ratios
-  if (is.null(lambda_list)) { lambda_list <- sort(diag(X^2)) }
+  if (is.null(lambda_list)) { lambda_list <- seq(0, 4, 0.1) }
   results <- vector("list", length(lambda_list))
   
   for (i in seq_along(lambda_list)) {
