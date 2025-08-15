@@ -45,4 +45,7 @@ set.seed(2025081300 + scenario_id)
 res <- replicate(num_iters, df_param) %>%
   mclapply(mc.cores = num_jobs, sim_indv_dat, mc.set.seed = TRUE)
 
-save(res, file = sprintf("../data/simulations/D_S%d.RData", scenario_id))
+# Save file
+D_name <- paste0("D_S", scenario_id)
+assign(paste0("D_S", scenario_id), res)
+save(list = D_name, file = sprintf("../data/simulations/D_S%d.RData", scenario_id))

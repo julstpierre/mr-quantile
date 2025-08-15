@@ -47,7 +47,8 @@ sim_dat <- function(args){
               "theta_D" = theta_2,
               "nclust" = nclust,
               "p" = p,
-              "maf" = maf
+              "maf" = maf,
+              "n" = n
               )
          )
 }
@@ -57,7 +58,7 @@ sim_indv_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(theta_1 = 0.2, theta_2 = 0, theta_3 = -1, nclust = 1, p = 50, h2 = 0.10, n = 50000)
+  # args <- list(theta_1 = 0.2, theta_2 = 0.8, theta_3 = -1, nclust = 4, p = 50, h2 = 0.10, n = 50000)
   n <- args$n
   theta_1 <- args$theta_1
   theta_3 <- args$theta_3
@@ -155,7 +156,8 @@ sim_indv_dat <- function(args){
               "theta_D" = theta_2,
               "nclust" = nclust,
               "p" = p,
-              "maf" = maf
+              "maf" = maf,
+              "n" = n
   )
   )
 }
@@ -378,19 +380,20 @@ fit_mvmrclust <- function(D){
 #--------------------------------------------------------------------------------
 fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
   
-  n <- length(D$beta_hat_y)
-  if (is.null(max_clusters)) { max_clusters <- n/2 }
+  n <- D$n
+  p <- length(D$beta_hat_y)
+  if (is.null(max_clusters)) { max_clusters <- p/2 }
   y <- D$beta_hat_y/sqrt(D$sigma2_y)
   X <- diag(D$beta_hat_x/sqrt(D$sigma2_y))
   
   # For each pair (i, j), we want a row with 1 at position i, -1 at position j
-  pairs <- do.call(rbind, lapply(1:(n - 1), function(i) cbind(i, (i + 1):min(n, i + k))))
+  pairs <- do.call(rbind, lapply(1:(p - 1), function(i) cbind(i, (i + 1):min(p, i + k))))
   m <- nrow(pairs)
   Dmat <- sparseMatrix(
     i = rep(seq_len(m), 2),
     j = c(pairs[,1], pairs[,2]),
     x = c(rep(1, m), rep(-1, m)),
-    dims = c(m, n)
+    dims = c(m, p)
   ) %>% as.matrix()
   
   # Apply a l2 regularization to the ratios
@@ -399,14 +402,14 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "mean
   
   for (i in seq_along(lambda_list)) {
       lambda <- lambda_list[i]
-      ytilde <- c(y, rep(0, n))
-      Xtilde <- rbind(X, sqrt(lambda) * diag(n))
+      ytilde <- c(y, rep(0, p))
+      Xtilde <- rbind(X, sqrt(lambda) * diag(p))
       ridge.ratios <- lm(ytilde ~ -1 + Xtilde)$coefficients %>% as.vector()
       
       # Order data by regularized ratios
       ord <- order(ridge.ratios)
-      ytilde <- c(y[ord], rep(0, n))
-      Xtilde <- rbind(X[ord, ord], sqrt(lambda) * diag(n))
+      ytilde <- c(y[ord], rep(0, p))
+      Xtilde <- rbind(X[ord, ord], sqrt(lambda) * diag(p))
       
       # Compute adaptive weights using differences in ratios
       eps     <- 0    # stability constant
@@ -417,9 +420,9 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "mean
       genlasso.fit <- genlasso(ytilde, Xtilde, D = diag(weights) %*% Dmat)
       
       # Compute EBIC for each lambda
-      rss <- colSums((genlasso.fit$fit[1:n, ] - ytilde[1:n])^2)
+      rss <- colSums((genlasso.fit$fit[1:p, ] - ytilde[1:p])^2)
       df <- genlasso.fit$df  # effective degrees of freedom
-      ebic <- rss / n + log(n) * df / n + 2 * ebic_coef * log(choose(n, df)) / n
+      ebic <- rss / p + log(n) * df / p + 2 * ebic_coef * log(choose(p, df)) / p
         
       # Return best fit
       results[[i]] <- list(
@@ -489,20 +492,21 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "mean
 
 fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
   
-  n <- length(D$beta_hat_y)
-  if (is.null(max_clusters)) { max_clusters <- n/2 }
+  n <- D$n
+  p <- length(D$beta_hat_y)
+  if (is.null(max_clusters)) { max_clusters <- p/2 }
   y <- D$beta_hat_y/sqrt(D$sigma2_y)
   X <- diag(as.vector(D$beta_hat_x/sqrt(D$sigma2_y)))
   M <- D$beta_hat_m/sqrt(D$sigma2_y)
     
   # For each pair (i, j), we want a row with 1 at position i, -1 at position j
-  pairs <- do.call(rbind, lapply(1:(n - 1), function(i) cbind(i, (i + 1):min(n, i + k))))
+  pairs <- do.call(rbind, lapply(1:(p - 1), function(i) cbind(i, (i + 1):min(p, i + k))))
   m <- nrow(pairs)
   Dmat <- sparseMatrix(
     i = rep(seq_len(m), 2),
     j = c(pairs[,1], pairs[,2]),
     x = c(rep(1, m), rep(-1, m)),
-    dims = c(m, n)
+    dims = c(m, p)
   ) %>% as.matrix()
   
   # Apply a l2 regularization to the ratios
@@ -511,14 +515,14 @@ fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "me
   
   for (i in seq_along(lambda_list)) {
     lambda <- lambda_list[i]
-    ytilde <- c(y, rep(0, n))
-    Xtilde <- rbind(cbind(X, M), cbind(sqrt(lambda) * diag(n), matrix(0, n, 1)))
-    ridge.ratios <- lm(ytilde ~ -1 + Xtilde)$coefficients[1:n] %>% as.vector()
+    ytilde <- c(y, rep(0, p))
+    Xtilde <- rbind(cbind(X, M), cbind(sqrt(lambda) * diag(p), matrix(0, p, 1)))
+    ridge.ratios <- lm(ytilde ~ -1 + Xtilde)$coefficients[1:p] %>% as.vector()
     
     # Order data by regularized ratios
     ord <- order(ridge.ratios)
-    ytilde <- c(y[ord], rep(0, n))
-    Xtilde <- rbind(cbind(M[ord], X[ord, ord]), cbind(sqrt(lambda) * diag(n), matrix(0, n, 1)))
+    ytilde <- c(y[ord], rep(0, p))
+    Xtilde <- rbind(cbind(M[ord], X[ord, ord]), cbind(sqrt(lambda) * diag(p), matrix(0, p, 1)))
       
     # Compute adaptive weights using differences in ratios
     eps     <- 0    # stability constant
@@ -529,9 +533,9 @@ fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "me
     genlasso.fit <- genlasso(ytilde, Xtilde, D = cbind(0, diag(weights) %*% Dmat))
     
     # Compute EBIC for each lambda
-    rss <- colSums((genlasso.fit$fit[1:n, ] - ytilde[1:n])^2)
+    rss <- colSums((genlasso.fit$fit[1:p, ] - ytilde[1:p])^2)
     df <- genlasso.fit$df  # effective degrees of freedom
-    ebic <- rss / n + log(n) * df / n + 2 * ebic_coef * log(choose(n, df - 1)) / n
+    ebic <- rss / p + log(n) * df / p + 2 * ebic_coef * log(choose(p, df - 1)) / p
     
     # Return best fit
     results[[i]] <- list(
@@ -539,8 +543,7 @@ fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "me
       theta_hat = round(genlasso.fit$beta[-1, which.min(ebic[df - 1 < max_clusters])], 4),
       ebic = min(ebic[df - 1 < max_clusters]),
       ord = ord,
-      ratios = ridge.ratios, 
-      sigma = unname(sqrt((rss / (n - df))[which.min(ebic[df - 1 < max_clusters])]))
+      ratios = ridge.ratios
     )
   }
   

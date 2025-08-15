@@ -22,7 +22,7 @@ if (length(args) < 3) {
   stop("Usage: Rscript sim_estim.R <scenario_name> <start_chunk> <end_chunk>")
 }
 
-scenario_name <- args[1]          # e.g., "D_S1_null"
+scenario_name <- args[1]          # e.g., "D_S1"
 start_idx     <- as.numeric(args[2])  # e.g., 1
 end_idx       <- as.numeric(args[3])  # e.g., 200
 
