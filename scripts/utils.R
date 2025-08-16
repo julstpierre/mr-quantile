@@ -490,7 +490,7 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "mean
   
 }
 
-fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
+fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = NULL, lambda_list = NULL, max_clusters = NULL){
   
   n <- D$n
   p <- length(D$beta_hat_y)
