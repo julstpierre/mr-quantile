@@ -13,7 +13,7 @@ source("utils.R")
 # Define the simulation parameters
 #-----------------------------------
 num_jobs <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", unset = "6"))
-num_iters <- 5000
+num_iters <- 1000
 params <- expand.grid(
   p = 50,
   theta_1 = c(0.2),

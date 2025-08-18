@@ -12,3 +12,9 @@ module load r
 
 # Pass the array index to R script
 Rscript sim_indv_dat.R ${SLURM_ARRAY_TASK_ID}
+
+# Run sequentially
+# for i in {1..8}
+# do
+#   Rscript sim_indv_dat.R $i
+# done

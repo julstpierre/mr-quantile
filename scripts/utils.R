@@ -86,7 +86,7 @@ sim_indv_dat <- function(args){
   epsilon_y <- rnorm(n)
   
   # Simulate latent factors
-  phi <- runif(p, -0.1, 0.1) * sapply(1:nclust, function(i) cluster == i)
+  phi <- runif(p, 0.2, 0.3) * sapply(1:nclust, function(i) cluster == i)
   phi[cluster == 1, ] <- 0
   W <- G %*% phi + epsilon_w
   apply(G %*% phi, 2, var) / apply(W, 2, var)
@@ -104,7 +104,7 @@ sim_indv_dat <- function(args){
   var(G %*% phi %*% delta_m) / var(M)
   
   # Simulate outcome
-  delta_y <- c(1, -0.2, 0.2, 0.4)[1:nclust]
+  delta_y <- delta_m
   Y <- theta_2 * X + theta_3 * M + W %*% delta_y + epsilon_y
   
   # Summary stats for X
@@ -157,50 +157,56 @@ sim_indv_dat <- function(args){
 #--------------------------------------------------------------------------------
 # Fit MR_IVW on simulated data
 #--------------------------------------------------------------------------------
-theta_ivw <- function(D, snps = 1:D$p){
-
-  total.effect <- lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] - 1, weights = D$sigma2_y[snps]^-1)$coef[1]
-  resid.std.error <-summary(lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] - 1, weights = D$sigma2_y[snps]^-1))$sigma
-  se.total.effect <- summary(lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] - 1, weights = D$sigma2_y[snps]^-1))$coef[1,2]
-  ci.upper.total <- max(total.effect + qnorm(0.975) * se.total.effect / resid.std.error,
-                       total.effect + qt(0.975, df=length(snps)-1) * se.total.effect)
-  ci.lower.total <- min(total.effect - qnorm(0.975) * se.total.effect / resid.std.error,
-                       total.effect - qt(0.975, df=length(snps)-1) * se.total.effect)
-
-  return(cbind("Estimate" = total.effect, "StdError" = se.total.effect, "LCL" = ci.lower.total, "UCL" = ci.upper.total))
-}
-
-theta_mvivw <- function(D, snps = 1:D$p){
-
-  direct.effect <- lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] + D$beta_hat_m[snps] - 1, weights = D$sigma2_y[snps]^-1)$coef[1]
-  resid.std.error <- summary(lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] - 1, weights = D$sigma2_y[snps]^-1))$sigma
-  se.direct.effect <- summary(lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] + D$beta_hat_m[snps] - 1, weights = D$sigma2_y[snps]^-1))$coef[1,2]
-  ci.upper.direct <- max(direct.effect + qnorm(0.975) * se.direct.effect / resid.std.error,
-                       direct.effect + qt(0.975, df=length(snps)-1) * se.direct.effect)
-  ci.lower.direct <- min(direct.effect - qnorm(0.975) * se.direct.effect / resid.std.error,
-                       direct.effect - qt(0.975, df=length(snps)-1) * se.direct.effect)
-
-  return(cbind("Estimate" = direct.effect, "StdError" = se.direct.effect, "LCL" = ci.lower.direct, "UCL" = ci.upper.direct))
-}
-
-fit_ivw <- function(D, snps = 1:D$p){
-  theta_T <- theta_ivw(D, snps)
-  theta_D <- theta_mvivw(D, snps)
-  theta <- cbind(
-          theta_T_hat = theta_T[,"Estimate"], theta_T_se = theta_T[,"StdError"],
-          theta_T_lcl = theta_T[,"LCL"], theta_T_ucl = theta_T[,"UCL"],
-          theta_D_hat = theta_D[,"Estimate"], theta_D_se = theta_D[,"StdError"],
-          theta_D_lcl = theta_D[,"LCL"], theta_D_ucl = theta_D[,"UCL"]
-        )
-  row.names(theta) <- NULL
-  return(theta)
-}
-
 # theta_ivw <- function(D, snps = 1:D$p){
-#   MRInputObject = mr_input(bx = D$beta_hat_x[snps], bxse = sqrt(D$sigma2_x[snps]), by = D$beta_hat_y[snps], byse = sqrt(D$sigma2_y[snps]))
-#   MR_IVW <- mr_ivw(MRInputObject)
-#   return(cbind("Estimate" = unname(MR_IVW$Estimate[1]), "StdError" = unname(MR_IVW$StdError[1]), "Pvalue" = unname(MR_IVW$Pvalue[1])))
+# 
+#   total.effect <- lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] - 1, weights = D$sigma2_y[snps]^-1)$coef[1]
+#   resid.std.error <-summary(lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] - 1, weights = D$sigma2_y[snps]^-1))$sigma
+#   se.total.effect <- summary(lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] - 1, weights = D$sigma2_y[snps]^-1))$coef[1,2]
+#   ci.upper.total <- max(total.effect + qnorm(0.975) * se.total.effect / resid.std.error,
+#                        total.effect + qt(0.975, df=length(snps)-1) * se.total.effect)
+#   ci.lower.total <- min(total.effect - qnorm(0.975) * se.total.effect / resid.std.error,
+#                        total.effect - qt(0.975, df=length(snps)-1) * se.total.effect)
+# 
+#   return(cbind("Estimate" = total.effect, "StdError" = se.total.effect, "LCL" = ci.lower.total, "UCL" = ci.upper.total))
 # }
+# 
+# theta_mvivw <- function(D, snps = 1:D$p){
+# 
+#   direct.effect <- lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] + D$beta_hat_m[snps] - 1, weights = D$sigma2_y[snps]^-1)$coef[1]
+#   resid.std.error <- summary(lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] - 1, weights = D$sigma2_y[snps]^-1))$sigma
+#   se.direct.effect <- summary(lm(D$beta_hat_y[snps] ~ D$beta_hat_x[snps] + D$beta_hat_m[snps] - 1, weights = D$sigma2_y[snps]^-1))$coef[1,2]
+#   ci.upper.direct <- max(direct.effect + qnorm(0.975) * se.direct.effect / resid.std.error,
+#                        direct.effect + qt(0.975, df=length(snps)-1) * se.direct.effect)
+#   ci.lower.direct <- min(direct.effect - qnorm(0.975) * se.direct.effect / resid.std.error,
+#                        direct.effect - qt(0.975, df=length(snps)-1) * se.direct.effect)
+# 
+#   return(cbind("Estimate" = direct.effect, "StdError" = se.direct.effect, "LCL" = ci.lower.direct, "UCL" = ci.upper.direct))
+# }
+# 
+# fit_ivw <- function(D, snps = 1:D$p){
+#   theta_T <- theta_ivw(D, snps)
+#   theta_D <- theta_mvivw(D, snps)
+#   theta <- cbind(
+#           theta_T_hat = theta_T[,"Estimate"], theta_T_se = theta_T[,"StdError"],
+#           theta_T_lcl = theta_T[,"LCL"], theta_T_ucl = theta_T[,"UCL"],
+#           theta_D_hat = theta_D[,"Estimate"], theta_D_se = theta_D[,"StdError"],
+#           theta_D_lcl = theta_D[,"LCL"], theta_D_ucl = theta_D[,"UCL"]
+#         )
+#   row.names(theta) <- NULL
+#   return(theta)
+# }
+
+theta_ivw <- function(D, snps = 1:D$p){
+  MRInputObject = mr_input(bx = D$beta_hat_x[snps], bxse = sqrt(D$sigma2_x[snps]), by = D$beta_hat_m[snps], byse = sqrt(D$sigma2_m[snps]))
+  MR_IVW <- mr_ivw(MRInputObject)
+  return(cbind("Estimate" = MR_IVW$Estimate, 
+               "StdError" = MR_IVW$StdError,
+               "LCL" = MR_IVW$CILower,
+               "UCL" = MR_IVW$CIUpper
+               )
+         )
+}
+
 # 
 # theta_mvivw <- function(D, snps = 1:D$p){
 #   MRInputObject = mr_mvinput(bx = cbind(D$beta_hat_x[snps], D$beta_hat_m[snps]), 
@@ -231,9 +237,14 @@ fit_ivw <- function(D, snps = 1:D$p){
 # Fit MR_Egger on simulated data
 #--------------------------------------------------------------------------------
 theta_egger <- function(D, snps = 1:D$p){
-    MRInputObject = mr_input(bx = D$beta_hat_x[snps], bxse = sqrt(D$sigma2_x[snps]), by = D$beta_hat_y[snps], byse = sqrt(D$sigma2_y[snps]))
+    MRInputObject = mr_input(bx = D$beta_hat_x[snps], bxse = sqrt(D$sigma2_x[snps]), by = D$beta_hat_m[snps], byse = sqrt(D$sigma2_m[snps]))
     MR_Egger <- mr_egger(MRInputObject)
-    return(cbind("Estimate" = unname(MR_Egger$Estimate[1]), "StdError" = unname(MR_Egger$StdError.Est[1]), "Pvalue" = unname(MR_Egger$Pvalue.Est[1])))
+    return(cbind("Estimate" = MR_Egger$Estimate, 
+                 "StdError" = MR_Egger$StdError.Est, 
+                 "LCL" = MR_Egger$CILower.Est,
+                 "UCL" = MR_Egger$CIUpper.Est
+                 )
+           )
 }
 
 theta_mvegger <- function(D, snps = 1:D$p){
@@ -265,8 +276,13 @@ fit_egger <- function(D, snps = 1:D$p){
 # Fit MR_Median on simulated data
 #--------------------------------------------------------------------------------
 theta_median <- function(D, snps = 1:D$p){
-    MR_Median <- summary(rq(D$beta_hat_y[snps]~-1+D$beta_hat_x[snps], weights = D$sigma2_y[snps]^-1), se = "boot")$coef
-    return(cbind("Estimate" = MR_Median[1], "StdError" = MR_Median[2], "Pvalue" = MR_Median[4]))
+    MR_Median <- summary(rq(D$beta_hat_m[snps]~-1+D$beta_hat_x[snps], weights = D$sigma2_m[snps]^-1), se = "boot")$coef
+    return(cbind("Estimate" = MR_Median[1], 
+                 "StdError" = MR_Median[2], 
+                 "LCL" = MR_Median[1] - qt(0.975, df = length(snps) - 1) * MR_Median[2],
+                 "UCL" = MR_Median[1] + qt(0.975, df = length(snps) - 1) * MR_Median[2]
+                 )
+           )
 }
 
 theta_mvmedian <- function(D, snps = 1:D$p){
@@ -322,8 +338,8 @@ fit_mrclust <- function(D){
       cbind(
            theta_main,
            nclust = nclust,
-           adj.rand = adjustedRandIndex(res_em_best$cluster, D$theta_T),
-           rand = rand.index(res_em_best$cluster, D$theta_T)
+           adj.rand = adjustedRandIndex(res_em_best$cluster_mean, D$theta_1),
+           rand = rand.index(res_em_best$cluster_mean, D$theta_1)
            )
       )
 }
@@ -370,13 +386,13 @@ fit_mvmrclust <- function(D){
 #--------------------------------------------------------------------------------
 # Fit generalized fused lasso on simulated data
 #--------------------------------------------------------------------------------
-fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
+fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = NULL, lambda_list = NULL, max_clusters = NULL){
   
   n <- D$n
-  p <- length(D$beta_hat_y)
+  p <- length(D$beta_hat_m)
   if (is.null(max_clusters)) { max_clusters <- p/2 }
-  y <- D$beta_hat_y/sqrt(D$sigma2_y)
-  X <- diag(D$beta_hat_x/sqrt(D$sigma2_y))
+  y <- D$beta_hat_m/sqrt(D$sigma2_m)
+  X <- diag(D$beta_hat_x/sqrt(D$sigma2_m))
   
   # For each pair (i, j), we want a row with 1 at position i, -1 at position j
   pairs <- do.call(rbind, lapply(1:(p - 1), function(i) cbind(i, (i + 1):min(p, i + k))))
@@ -389,7 +405,10 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "mean
   ) %>% as.matrix()
   
   # Apply a l2 regularization to the ratios
-  if (is.null(lambda_list)) { lambda_list <- seq(0, 3, 0.1) }
+  if (is.null(lambda_list)) { 
+    glmnet_fit <- glmnet(X, y, alpha = 0, standardize = FALSE, intercept = FALSE)
+    lambda_list <- rev(glmnet_fit$lambda)[1:40] 
+  }
   results <- vector("list", length(lambda_list))
   
   for (i in seq_along(lambda_list)) {
@@ -475,8 +494,8 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = "mean
     cbind(
       theta_main,
       nclust = nclust,
-      adj.rand = adjustedRandIndex(theta_hat, D$theta_T),
-      rand = rand.index(theta_hat, D$theta_T)
+      adj.rand = adjustedRandIndex(theta_hat, D$theta_1),
+      rand = rand.index(theta_hat, D$theta_1)
     )
   )
   
