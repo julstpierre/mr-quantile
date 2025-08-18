@@ -99,7 +99,7 @@ sim_indv_dat <- function(args){
   var(G %*% phi %*% delta_x) / var(X)
   
   # Simulate mediator
-  delta_m <- c(1, -0.2, 0.2, 0.4)[1:nclust]
+  delta_m <- c(1, -0.4, 0.4, 0.8)[1:nclust]
   M <- theta_1 * X + W %*% delta_m + epsilon_m
   var(G %*% phi %*% delta_m) / var(M)
   
