@@ -58,63 +58,54 @@ sim_indv_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(theta_1 = 0.2, theta_2 = 0.8, theta_3 = -1, nclust = 4, p = 50, h2 = 0.10, n = 50000)
+  # args <- list(theta_1 = 0.2, theta_2 = 0.8, theta_3 = -1, nclust = 4, p = 50, n = 50000)
   n <- args$n
   theta_1 <- args$theta_1
+  theta_2 <- args$theta_2
   theta_3 <- args$theta_3
   nclust <- args$nclust
   p <- args$p
   h2 <- args$h2
   
   if (nclust == 1){
-    theta_2 <- rep(args$theta_2, p)
-  } else {
-    if (p == 30){
-      theta_2 <- rep(c(args$theta_2, -0.4, 0.8 - args$theta_2, 0.4), times = c(12, 6, 6, 6))
-    } else if (p == 50){
-      theta_2 <- rep(c(args$theta_2, -0.4, 0.8 - args$theta_2, 0.4), times = c(20, 10, 10, 10))
-    } else if (p == 100){
-      theta_2 <- rep(c(args$theta_2, -0.4, 0.8 - args$theta_2, 0.4), times = c(45, 20, 20, 15))
-    }
+      cluster <- rep(1, p)
+  } else if (p == 30){
+      cluster <- rep(1:4, times = c(12, 6, 6, 6))
+  } else if (p == 50){
+      cluster <- rep(1:4, times = c(20, 10, 10, 10))
+  } else if (p == 100){
+      cluster <- rep(1:4, times = c(45, 20, 20, 15))
   }
   
   # Simulate genetic data and confounders
   maf <- runif(p, 0.05, 0.5)
   G <- sapply(maf, function(maf) rbinom(n, 2, maf))
-  U <- rnorm(n)
   epsilon_w <- mvrnorm(n, mu = rep(0, nclust), Sigma = diag(1, nclust))
   epsilon_x <- rnorm(n)
   epsilon_m <- rnorm(n)
   epsilon_y <- rnorm(n)
   
-  # Simulate latent factors with 20% of variance explained by genetic predictors
-  delta_w <- mvrnorm(p, mu = rep(0.2, nclust), Sigma = diag(0.1^2, nclust)) * sapply(1:nclust, function(i) theta_2 == unique(theta_2)[i])
-  h2_w <- 0.2
-  scaling_factors <- sqrt( h2_w / (1 - h2_w) * apply(epsilon_w, 2, var) / apply(G %*% delta_w, 2, var))
-  if (nclust == 1){
-    delta_w <- delta_w * scaling_factors
-  } else {
-    delta_w <- delta_w %*% diag(scaling_factors)
-  }
-  W <- G %*% delta_w + epsilon_w
-  apply(G %*% delta_w, 2, var) / apply(W, 2, var) # ~0.2
+  # Simulate latent factors
+  phi <- runif(p, -0.1, 0.1) * sapply(1:nclust, function(i) cluster == i)
+  phi[cluster == 1, ] <- 0
+  W <- G %*% phi + epsilon_w
+  apply(G %*% phi, 2, var) / apply(W, 2, var)
   
   # Simulate exposure
-  delta_x <- runif(nclust, -1, 1)
-  phi <- h2 * ( var( U ) + var( epsilon_x ) ) / ( var( G %*% ( delta_w %*% delta_x ) ) - h2 * var( W %*% delta_x ) )
-  delta_x <- delta_x %*% sqrt(phi)
-  X <- W %*% delta_x + U + epsilon_x
-  var(G %*% delta_w %*% delta_x) / var(X) # ~0.1
+  gamma <- runif(p, 0.1, 0.2) * sample(c(-1, 1), size = p, replace = TRUE)
+  gamma[cluster != 1] <- 0
+  delta_x <- rep(1, nclust)
+  X <- G %*% gamma + W %*% delta_x + epsilon_x
+  var(G %*% phi %*% delta_x) / var(X)
   
   # Simulate mediator
-  delta_m <- rnorm(p, mean = 0, sd = 0.1)
-  M <- theta_1 * X + U + epsilon_m + G %*% delta_m
+  delta_m <- c(1, -0.2, 0.2, 0.4)[1:nclust]
+  M <- theta_1 * X + W %*% delta_m + epsilon_m
+  var(G %*% phi %*% delta_m) / var(M)
   
   # Simulate outcome
-  gamma <- delta_w %*% delta_x
-  alpha <- gamma * (theta_2 - theta_2[1])
-  delta_y <- qr.solve(delta_w, alpha)
-  Y <- theta_2[1] * X + W %*% delta_y + theta_3 * M + U + epsilon_y
+  delta_y <- c(1, -0.2, 0.2, 0.4)[1:nclust]
+  Y <- theta_2 * X + theta_3 * M + W %*% delta_y + epsilon_y
   
   # Summary stats for X
   sampX = seq(1, n)
@@ -152,8 +143,9 @@ sim_indv_dat <- function(args){
               "sigma2_y" = sigma2_y, 
               "beta_hat_m" = as.vector(beta_hat_m), 
               "sigma2_m" = sigma2_m,
-              "theta_T" = theta_2 + theta_1 * theta_3,
-              "theta_D" = theta_2,
+              "theta_1" = theta_1 + c(0, delta_m[-1])[cluster],
+              "theta_2" = theta_2 + c(0, delta_y[-1])[cluster],
+              "theta_3" = theta_3 + c(0, delta_y[-1])[cluster],
               "nclust" = nclust,
               "p" = p,
               "maf" = maf,
@@ -301,14 +293,14 @@ fit_median <- function(D, snps = 1:D$p){
 # Fit MR_Clust on simulated data
 #--------------------------------------------------------------------------------
 fit_mrclust <- function(D){
-    ratios <- as.vector(D$beta_hat_y / D$beta_hat_x)
-    ratios.se <- sqrt(D$sigma2_y) / abs(D$beta_hat_x)
+    ratios <- as.vector(D$beta_hat_m / D$beta_hat_x)
+    ratios.se <- sqrt(D$sigma2_m) / abs(D$beta_hat_x)
     res_em <- mr_clust_em(theta = ratios, 
                           theta_se = ratios.se, 
                           bx = D$beta_hat_x, 
-                          by = D$beta_hat_y, 
+                          by = D$beta_hat_m, 
                           bxse = sqrt(D$sigma2_x), 
-                          byse = sqrt(D$sigma2_y),
+                          byse = sqrt(D$sigma2_m),
                           obs_names = paste0("SNP", 1:D$p)
                          )
     

@@ -17,11 +17,10 @@ num_iters <- 5000
 params <- expand.grid(
   p = 50,
   theta_1 = c(0.2),
-  theta_2 = c(0, 0.8),
+  theta_2 = c(0, 0.2),
   theta_3 = c(-1, 1),
   nclust = c(1, 4),
-  n = 50000,
-  h2 = 0.10
+  n = 50000
 )
 
 #----------------------------------------------------------------------
@@ -29,13 +28,13 @@ params <- expand.grid(
 #----------------------------------------------------------------------
 scenario_list <- list(
   filter(params, theta_2 == 0,   theta_3 == -1, nclust == 1), # S1
-  filter(params, theta_2 == 0.8, theta_3 == -1, nclust == 1), # S2
+  filter(params, theta_2 == 0.2, theta_3 == -1, nclust == 1), # S2
   filter(params, theta_2 == 0,   theta_3 == 1,  nclust == 1), # S3
-  filter(params, theta_2 == 0.8, theta_3 == 1,  nclust == 1), # S4
+  filter(params, theta_2 == 0.2, theta_3 == 1,  nclust == 1), # S4
   filter(params, theta_2 == 0,   theta_3 == -1, nclust == 4), # S5
-  filter(params, theta_2 == 0.8, theta_3 == -1, nclust == 4), # S6
+  filter(params, theta_2 == 0.2, theta_3 == -1, nclust == 4), # S6
   filter(params, theta_2 == 0,   theta_3 == 1,  nclust == 4), # S7
-  filter(params, theta_2 == 0.8, theta_3 == 1,  nclust == 4)  # S8
+  filter(params, theta_2 == 0.2, theta_3 == 1,  nclust == 4)  # S8
 )
 
 df_param <- scenario_list[[scenario_id]] %>% list()
