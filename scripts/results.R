@@ -22,21 +22,14 @@ if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 # -----------------------------
 # Scenario metadata
 # -----------------------------
-params <- expand.grid(
+scenario_metadata <- expand.grid(
   p = 50,
   theta_1 = c(0.2),
-  theta_2 = c(0, 0.8),
+  theta_2 = c(0, 0.2),
   theta_3 = c(-1, 1),
   nclust = c(1, 4),
-  n = 10000,
-  h2 = 0.10
-)
-
-scenario_metadata <- tibble(
-  scenario = paste0("S", 1:8),
-  theta_D_true = params$theta_2,
-  theta_T_true = params$theta_2 + params$theta_1 * params$theta_3
-)
+  n = 50000
+) %>% mutate(scenario = paste0("S", 1:8)) %>% dplyr::select(-nclust)
 
 # -----------------------------
 # Load and process all results
@@ -71,58 +64,43 @@ all_results <- map_dfr(all_files, read_and_expand) %>%
 # -----------------------------
 # Summary statistics
 # -----------------------------
-summary_stats_theta_T <- all_results %>%
+summary_stats_theta_1 <- all_results %>%
   group_by(scenario, method, ebic) %>%
   summarise(
-    theta_T = mean(theta_T_true),
-    mean = mean(theta_T_hat, na.rm = TRUE),
-    bias = mean(theta_T_hat - theta_T_true, na.rm = TRUE),
-    sd = sd(theta_T_hat, na.rm = TRUE),
-    coverage = mean(theta_T_true >= theta_T_lcl & theta_T_true <= theta_T_ucl, na.rm = TRUE),
-    ci_width = mean(theta_T_ucl - theta_T_lcl, na.rm = TRUE),
+    theta_1 = mean(theta_1),
+    mean = mean(Estimate, na.rm = TRUE),
+    bias = mean(Estimate - theta_1, na.rm = TRUE),
+    sd = sd(Estimate, na.rm = TRUE),
+    coverage = mean(theta_1 >= LCL & theta_1 <= UCL, na.rm = TRUE),
+    ci_width = mean(UCL - LCL, na.rm = TRUE),
     nclust = mean(nclust, na.rm = TRUE),
     rand = mean(rand, na.rm = TRUE),
     n = n(),
     .groups = "drop"
   )
 
-summary_stats_theta_D <- all_results %>%
-  group_by(scenario, method, ebic) %>%
-  summarise(
-    theta_D = mean(theta_D_true),
-    mean = mean(theta_D_hat, na.rm = TRUE),
-    bias = mean(theta_D_hat - theta_D_true, na.rm = TRUE),
-    sd = sd(theta_D_hat, na.rm = TRUE),
-    coverage = mean(theta_D_true >= theta_D_lcl & theta_D_true <= theta_D_ucl, na.rm = TRUE),
-    ci_width = mean(theta_D_ucl - theta_D_lcl, na.rm = TRUE),
-    nclust = mean(nclust, na.rm = TRUE),
-    rand = mean(rand, na.rm = TRUE),
-    n = n(),
-    .groups = "drop"
-  )
-
-filter(summary_stats_theta_D, scenario == "S1") %>%
+filter(summary_stats_theta_1, scenario == "S1") %>%
     print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S2") %>%
+filter(summary_stats_theta_1, scenario == "S2") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S3") %>%
+filter(summary_stats_theta_1, scenario == "S3") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S4") %>%
+filter(summary_stats_theta_1, scenario == "S4") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S5") %>%
+filter(summary_stats_theta_1, scenario == "S5") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S6") %>%
+filter(summary_stats_theta_1, scenario == "S6") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S7") %>%
+filter(summary_stats_theta_1, scenario == "S7") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_D, scenario == "S8") %>%
+filter(summary_stats_theta_1, scenario == "S8") %>%
   print(width = Inf)
 
 # -----------------------------
