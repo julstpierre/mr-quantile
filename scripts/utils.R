@@ -386,13 +386,41 @@ fit_mvmrclust <- function(D){
 #--------------------------------------------------------------------------------
 # Fit generalized fused lasso on simulated data
 #--------------------------------------------------------------------------------
-fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = NULL, lambda_list = NULL, max_clusters = NULL){
+fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 1, post_hoc = NULL, lambda_list = NULL, max_clusters = NULL){
   
   n <- D$n
   p <- length(D$beta_hat_m)
   if (is.null(max_clusters)) { max_clusters <- p/2 }
   y <- D$beta_hat_m/sqrt(D$sigma2_m)
   X <- diag(D$beta_hat_x/sqrt(D$sigma2_m))
+  eigenvals <- eigen(t(X) %*% X)$values
+  
+  # Apply a l2 regularization to the ratios
+  if (is.null(lambda_list)) { 
+    glmnet_fit <- glmnet(X, y, alpha = 0, standardize = FALSE, intercept = FALSE)
+    lambda_list <- glmnet_fit$lambda
+  }
+  
+  bic <- c()
+  for (i in seq_along(lambda_list)) {
+      path[[i]] <- list()
+      lambda <- lambda_list[i]
+      ytilde <- c(y, rep(0, p))
+      Xtilde <- rbind(X, sqrt(lambda) * diag(p))
+      ridge.fit <- lm(ytilde ~ -1 + Xtilde)
+      path[[i]]$ratios <- ridge.fit$coefficients %>% as.vector()
+      path[[i]]$ratios.se <- abs(D$beta_hat_x) * sqrt(D$sigma2_m) / (D$beta_hat_x^2 + lambda * D$sigma2_m)
+      bic[i] <- sum(residuals(ridge.fit)[1:p]^2) / p + log(n) * sum(eigenvals / (eigenvals + lambda)) / p
+  }
+  
+  lambda <- lambda_list[which.min(bic)]
+  Xtilde <- rbind(X, sqrt(lambda) * diag(p))
+  ratios <- lm(ytilde ~ -1 + Xtilde)$coefficients %>% as.vector()
+    
+  # Order data by regularized ratios
+  ord <- order(ratios)
+  ytilde <- c(y[ord], rep(0, p))
+  Xtilde <- rbind(X[ord, ord], sqrt(lambda) * diag(p))
   
   # For each pair (i, j), we want a row with 1 at position i, -1 at position j
   pairs <- do.call(rbind, lapply(1:(p - 1), function(i) cbind(i, (i + 1):min(p, i + k))))
@@ -404,49 +432,29 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = NULL,
     dims = c(m, p)
   ) %>% as.matrix()
   
-  # Apply a l2 regularization to the ratios
-  if (is.null(lambda_list)) { 
-    glmnet_fit <- glmnet(X, y, alpha = 0, standardize = FALSE, intercept = FALSE)
-    lambda_list <- rev(glmnet_fit$lambda)[1:40] 
-  }
-  results <- vector("list", length(lambda_list))
+  # Compute adaptive weights using differences in ratios
+  eps     <- 0    # stability constant
+  diffs   <- sweep(Dmat, 2, ratios[ord], `*`) %>% rowSums() %>% abs()
+  weights <- 1 / (diffs^gamma + eps)
   
-  for (i in seq_along(lambda_list)) {
-      lambda <- lambda_list[i]
-      ytilde <- c(y, rep(0, p))
-      Xtilde <- rbind(X, sqrt(lambda) * diag(p))
-      ridge.ratios <- lm(ytilde ~ -1 + Xtilde)$coefficients %>% as.vector()
-      
-      # Order data by regularized ratios
-      ord <- order(ridge.ratios)
-      ytilde <- c(y[ord], rep(0, p))
-      Xtilde <- rbind(X[ord, ord], sqrt(lambda) * diag(p))
-      
-      # Compute adaptive weights using differences in ratios
-      eps     <- 0    # stability constant
-      diffs   <- sweep(Dmat, 2, ridge.ratios[ord], `*`) %>% rowSums() %>% abs()
-      weights <- 1 / (diffs^gamma + eps)
-      
-      # Fit model
-      genlasso.fit <- genlasso(ytilde, Xtilde, D = diag(weights) %*% Dmat)
-      
-      # Compute EBIC for each lambda
-      rss <- colSums((genlasso.fit$fit[1:p, ] - ytilde[1:p])^2)
-      df <- genlasso.fit$df  # effective degrees of freedom
-      ebic <- rss / p + log(n) * df / p + 2 * ebic_coef * log(choose(p, df)) / p
-        
-      # Return best fit
-      results[[i]] <- list(
-        lambda = lambda,
-        theta_hat = round(genlasso.fit$beta[, which.min(ebic[df < max_clusters])], 4),
-        ebic = min(ebic[df < max_clusters]),
-        ord = ord,
-        ratios = ridge.ratios
-      )
-  }
+  # Fit model
+  genlasso.fit <- genlasso(ytilde, Xtilde, D = diag(weights) %*% Dmat)
+  
+  # Compute EBIC for each lambda
+  rss <- colSums((genlasso.fit$fit[1:p, ] - ytilde[1:p])^2)
+  df <- genlasso.fit$df  # effective degrees of freedom
+  ebic <- rss / p + log(n) * df / p + 2 * ebic_coef * log(choose(p, df)) / p
+    
+  # Return best fit
+  best_fit <- list(
+    lambda = lambda,
+    theta_hat = round(genlasso.fit$beta[, which.min(ebic[df < max_clusters])], 4),
+    ebic = min(ebic[df < max_clusters]),
+    ord = ord,
+    ratios = ratios
+  )
   
   # Select best model
-  best_fit <- results[[which.min(sapply(results, function(x) x$ebic))]]
   best_fit$lambda
   table(best_fit$theta_hat)
   
@@ -456,10 +464,9 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = NULL,
     # Compute distance matrix
     cluster_means <- sort(unique(best_fit$theta_hat))
     names(cluster_means) <- cluster_means
-    ratios.se <- sqrt(D$sigma2_y) / abs(D$beta_hat_x)
-    distance_list <- lapply(results, function(res) {
+    distance_list <- lapply(path, function(res) {
       sapply(cluster_means, function(mu) {
-        (res$ratios - mu)^2 / ratios.se^2
+        (res$ratios - mu)^2 / res$ratios.se^2
       })
     })
     
