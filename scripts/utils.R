@@ -386,7 +386,7 @@ fit_mvmrclust <- function(D){
 #--------------------------------------------------------------------------------
 # Fit generalized fused lasso on simulated data
 #--------------------------------------------------------------------------------
-fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 1, post_hoc = NULL, lambda_list = NULL, max_clusters = NULL){
+fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 1, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
   
   n <- D$n
   p <- length(D$beta_hat_m)
