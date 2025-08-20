@@ -33,7 +33,7 @@ scenario_list <- list(
   filter(params, theta_2 == 0.1,  nclust == 4) # S4
 )
 
-for (scenario_id in 1:4){
+#for (scenario_id in 1:4){
   df_param <- scenario_list[[scenario_id]] %>% list()
   
   set.seed(2025081300 + scenario_id)
@@ -44,5 +44,5 @@ for (scenario_id in 1:4){
   # Save file
   D_name <- paste0("D_S", scenario_id)
   assign(paste0("D_S", scenario_id), res)
-}
+#}
 save(list = D_name, file = sprintf("../data/simulations/D_S%d.RData", scenario_id))
