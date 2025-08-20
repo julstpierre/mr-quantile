@@ -24,12 +24,12 @@ if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 # -----------------------------
 scenario_metadata <- expand.grid(
   p = 50,
-  theta_1 = c(0.2),
+  theta_1 = c(0),
   theta_2 = c(0, 0.2),
-  theta_3 = c(-1, 1),
+  theta_3 = c(0),
   nclust = c(1, 4),
   n = 50000
-) %>% mutate(scenario = paste0("S", 1:8)) %>% dplyr::select(-nclust)
+) %>% mutate(scenario = paste0("S", 1:4)) %>% dplyr::select(-nclust)
 
 # -----------------------------
 # Load and process all results
@@ -89,18 +89,6 @@ filter(summary_stats_theta_1, scenario == "S3") %>%
   print(width = Inf)
 
 filter(summary_stats_theta_1, scenario == "S4") %>%
-  print(width = Inf)
-
-filter(summary_stats_theta_1, scenario == "S5") %>%
-  print(width = Inf)
-
-filter(summary_stats_theta_1, scenario == "S6") %>%
-  print(width = Inf)
-
-filter(summary_stats_theta_1, scenario == "S7") %>%
-  print(width = Inf)
-
-filter(summary_stats_theta_1, scenario == "S8") %>%
   print(width = Inf)
 
 # -----------------------------

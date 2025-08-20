@@ -58,7 +58,7 @@ sim_indv_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(theta_1 = 0.2, theta_2 = 0.8, theta_3 = -1, nclust = 4, p = 50, n = 50000)
+  # args <- list(theta_1 = 0, theta_2 = 0.1, theta_3 = 0, nclust = 4, p = 50, n = 50000)
   n <- args$n
   theta_1 <- args$theta_1
   theta_2 <- args$theta_2
@@ -79,33 +79,34 @@ sim_indv_dat <- function(args){
   
   # Simulate genetic data and confounders
   maf <- runif(p, 0.05, 0.5)
-  G <- sapply(maf, function(maf) rbinom(n, 2, maf))
-  epsilon_w <- mvrnorm(n, mu = rep(0, nclust), Sigma = diag(1, nclust))
-  epsilon_x <- rnorm(n)
-  epsilon_m <- rnorm(n)
-  epsilon_y <- rnorm(n)
+  G <- sapply(maf, function(maf) rbinom(2 * n, 2, maf))
+  epsilon_w <- mvrnorm(2 * n, mu = rep(0, nclust), Sigma = diag(1, nclust))
+  epsilon_x <- rnorm(2 * n)
+  epsilon_m <- rnorm(2 * n)
+  epsilon_y <- rnorm(2 * n)
   
   # Simulate latent factors
   phi <- runif(p, 0.2, 0.3) * sapply(1:nclust, function(i) cluster == i)
   phi[cluster == 1, ] <- 0
   W <- G %*% phi + epsilon_w
-  apply(G %*% phi, 2, var) / apply(W, 2, var)
+  # apply(G %*% phi, 2, var) / apply(W, 2, var)
   
   # Simulate exposure
-  gamma <- runif(p, 0.1, 0.2) * sample(c(-1, 1), size = p, replace = TRUE)
+  gamma <- runif(p, 0.2, 0.3) * sample(c(-1, 1), size = p, replace = TRUE)
   gamma[cluster != 1] <- 0
   delta_x <- rep(1, nclust)
   X <- G %*% gamma + W %*% delta_x + epsilon_x
-  var(G %*% phi %*% delta_x) / var(X)
+  # var(G %*% phi %*% delta_x) / var(X)
   
   # Simulate mediator
-  delta_m <- c(1, -0.6, 0.6, 1.2)[1:nclust]
+  delta_m <- c(1, -0.7, 0.7, 1.4)[1:nclust]
   M <- theta_1 * X + W %*% delta_m + epsilon_m
-  var(G %*% phi %*% delta_m) / var(M)
+  # var(G %*% phi %*% delta_m) / var(M)
   
   # Simulate outcome
   delta_y <- delta_m
   Y <- theta_2 * X + theta_3 * M + W %*% delta_y + epsilon_y
+  var(G %*% phi %*% delta_y) / var(Y)
   
   # Summary stats for X
   sampX = seq(1, n)
@@ -117,7 +118,7 @@ sim_indv_dat <- function(args){
   residuals2 <- colSums((matrix(Xc, n, p) - Gc * rep(beta_hat_x, each = n))^2)
   sigma2_x <- residuals2 / (n - 2) / GtG
   
-  # Summary stats for X
+  # Summary stats for M
   sampM = seq(1, n)
   Gc <- scale(G[sampM, ], scale = FALSE)
   Mc <- M[sampM] - mean(M[sampM])
@@ -128,7 +129,7 @@ sim_indv_dat <- function(args){
   sigma2_m <- residuals2 / (n - 2) / GtG
   
   # Summary stats for Y
-  sampY <- seq(1, n)
+  sampY <- seq(n+1, 2*n)
   Yc <- Y[sampY] - mean(Y[sampY])
   Gc <- scale(G[sampY, ], scale = FALSE)
   XtG <- crossprod(Gc, Yc)
@@ -197,7 +198,7 @@ sim_indv_dat <- function(args){
 # }
 
 theta_ivw <- function(D, snps = 1:D$p){
-  MRInputObject = mr_input(bx = D$beta_hat_x[snps], bxse = sqrt(D$sigma2_x[snps]), by = D$beta_hat_m[snps], byse = sqrt(D$sigma2_m[snps]))
+  MRInputObject = mr_input(bx = D$beta_hat_x[snps], bxse = sqrt(D$sigma2_x[snps]), by = D$beta_hat_y[snps], byse = sqrt(D$sigma2_y[snps]))
   MR_IVW <- mr_ivw(MRInputObject)
   return(cbind("Estimate" = MR_IVW$Estimate, 
                "StdError" = MR_IVW$StdError,
@@ -237,7 +238,7 @@ theta_ivw <- function(D, snps = 1:D$p){
 # Fit MR_Egger on simulated data
 #--------------------------------------------------------------------------------
 theta_egger <- function(D, snps = 1:D$p){
-    MRInputObject = mr_input(bx = D$beta_hat_x[snps], bxse = sqrt(D$sigma2_x[snps]), by = D$beta_hat_m[snps], byse = sqrt(D$sigma2_m[snps]))
+    MRInputObject = mr_input(bx = D$beta_hat_x[snps], bxse = sqrt(D$sigma2_x[snps]), by = D$beta_hat_y[snps], byse = sqrt(D$sigma2_y[snps]))
     MR_Egger <- mr_egger(MRInputObject)
     return(cbind("Estimate" = MR_Egger$Estimate, 
                  "StdError" = MR_Egger$StdError.Est, 
@@ -276,7 +277,7 @@ fit_egger <- function(D, snps = 1:D$p){
 # Fit MR_Median on simulated data
 #--------------------------------------------------------------------------------
 theta_median <- function(D, snps = 1:D$p){
-    MR_Median <- summary(rq(D$beta_hat_m[snps]~-1+D$beta_hat_x[snps], weights = D$sigma2_m[snps]^-1), se = "boot")$coef
+    MR_Median <- summary(rq(D$beta_hat_y[snps]~-1+D$beta_hat_x[snps], weights = D$sigma2_y[snps]^-1), se = "boot")$coef
     return(cbind("Estimate" = MR_Median[1], 
                  "StdError" = MR_Median[2], 
                  "LCL" = MR_Median[1] - qt(0.975, df = length(snps) - 1) * MR_Median[2],
@@ -309,14 +310,14 @@ fit_median <- function(D, snps = 1:D$p){
 # Fit MR_Clust on simulated data
 #--------------------------------------------------------------------------------
 fit_mrclust <- function(D){
-    ratios <- as.vector(D$beta_hat_m / D$beta_hat_x)
-    ratios.se <- sqrt(D$sigma2_m) / abs(D$beta_hat_x)
+    ratios <- as.vector(D$beta_hat_y / D$beta_hat_x)
+    ratios.se <- sqrt(D$sigma2_y) / abs(D$beta_hat_x)
     res_em <- mr_clust_em(theta = ratios, 
                           theta_se = ratios.se, 
                           bx = D$beta_hat_x, 
-                          by = D$beta_hat_m, 
+                          by = D$beta_hat_y, 
                           bxse = sqrt(D$sigma2_x), 
-                          byse = sqrt(D$sigma2_m),
+                          byse = sqrt(D$sigma2_y),
                           obs_names = paste0("SNP", 1:D$p)
                          )
     
@@ -338,8 +339,8 @@ fit_mrclust <- function(D){
       cbind(
            theta_main,
            nclust = nclust,
-           adj.rand = adjustedRandIndex(res_em_best$cluster_mean, D$theta_1),
-           rand = rand.index(res_em_best$cluster_mean, D$theta_1)
+           adj.rand = adjustedRandIndex(res_em_best$cluster_mean, D$theta_2),
+           rand = rand.index(res_em_best$cluster_mean, D$theta_2)
            )
       )
 }
@@ -389,18 +390,19 @@ fit_mvmrclust <- function(D){
 fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 1, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
   
   n <- D$n
-  p <- length(D$beta_hat_m)
+  p <- length(D$beta_hat_y)
   if (is.null(max_clusters)) { max_clusters <- p/2 }
-  y <- D$beta_hat_m/sqrt(D$sigma2_m)
-  X <- diag(D$beta_hat_x/sqrt(D$sigma2_m))
+  y <- D$beta_hat_y/sqrt(D$sigma2_y)
+  X <- diag(D$beta_hat_x/sqrt(D$sigma2_y))
   eigenvals <- eigen(t(X) %*% X)$values
   
   # Apply a l2 regularization to the ratios
   if (is.null(lambda_list)) { 
     glmnet_fit <- glmnet(X, y, alpha = 0, standardize = FALSE, intercept = FALSE)
-    lambda_list <- glmnet_fit$lambda
+    lambda_list <- c(0, rev(glmnet_fit$lambda))
   }
   
+  path <- vector("list", length(lambda_list))
   bic <- c()
   for (i in seq_along(lambda_list)) {
       path[[i]] <- list()
@@ -409,7 +411,7 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 1, post_hoc = "mean
       Xtilde <- rbind(X, sqrt(lambda) * diag(p))
       ridge.fit <- lm(ytilde ~ -1 + Xtilde)
       path[[i]]$ratios <- ridge.fit$coefficients %>% as.vector()
-      path[[i]]$ratios.se <- abs(D$beta_hat_x) * sqrt(D$sigma2_m) / (D$beta_hat_x^2 + lambda * D$sigma2_m)
+      path[[i]]$ratios.se <- abs(D$beta_hat_x) * sqrt(D$sigma2_y) / (D$beta_hat_x^2 + lambda * D$sigma2_y)
       bic[i] <- sum(residuals(ridge.fit)[1:p]^2) / p + log(n) * sum(eigenvals / (eigenvals + lambda)) / p
   }
   
@@ -440,7 +442,7 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 1, post_hoc = "mean
   # Fit model
   genlasso.fit <- genlasso(ytilde, Xtilde, D = diag(weights) %*% Dmat)
   
-  # Compute EBIC for each lambda
+  # Compute EBIC to select number of clusters
   rss <- colSums((genlasso.fit$fit[1:p, ] - ytilde[1:p])^2)
   df <- genlasso.fit$df  # effective degrees of freedom
   ebic <- rss / p + log(n) * df / p + 2 * ebic_coef * log(choose(p, df)) / p
@@ -464,7 +466,7 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 1, post_hoc = "mean
     # Compute distance matrix
     cluster_means <- sort(unique(best_fit$theta_hat))
     names(cluster_means) <- cluster_means
-    distance_list <- lapply(path, function(res) {
+    distance_list <- lapply(path[1:which.min(bic)], function(res) {
       sapply(cluster_means, function(mu) {
         (res$ratios - mu)^2 / res$ratios.se^2
       })
@@ -501,8 +503,8 @@ fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 1, post_hoc = "mean
     cbind(
       theta_main,
       nclust = nclust,
-      adj.rand = adjustedRandIndex(theta_hat, D$theta_1),
-      rand = rand.index(theta_hat, D$theta_1)
+      adj.rand = adjustedRandIndex(theta_hat, D$theta_2),
+      rand = rand.index(theta_hat, D$theta_2)
     )
   )
   

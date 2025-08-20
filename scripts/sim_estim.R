@@ -29,7 +29,7 @@ end_idx       <- as.numeric(args[3])  # e.g., 200
 # -----------------------------
 # Load simulation data
 # -----------------------------
-for (f in paste0("D_S", 1:8, ".RData")) {
+for (f in paste0("D_S", 1:4, ".RData")) {
   load(paste0("../data/simulations/", f))
   rm(f)
 }

@@ -14,7 +14,7 @@ module load r
 Rscript sim_indv_dat.R ${SLURM_ARRAY_TASK_ID}
 
 # Run sequentially
-# for i in {1..8}
+# for i in {1..4}
 # do
 #   Rscript sim_indv_dat.R $i
 # done
