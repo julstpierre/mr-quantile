@@ -44,5 +44,6 @@ scenario_list <- list(
   # Save file
   D_name <- paste0("D_S", scenario_id)
   assign(paste0("D_S", scenario_id), res)
+  
+  save(list = D_name, file = sprintf("../data/simulations/D_S%d.RData", scenario_id))
 #}
-save(list = D_name, file = sprintf("../data/simulations/D_S%d.RData", scenario_id))
