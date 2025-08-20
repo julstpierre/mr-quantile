@@ -58,24 +58,18 @@ sim_indv_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(theta_1 = 0, theta_2 = 0.1, theta_3 = 0, nclust = 4, p = 50, n = 50000)
+  # args <- list(theta_1 = 0, theta_2 = 0.1, theta_3 = 0, p = 60, n = 50000, q = 0.6)
   n <- args$n
   theta_1 <- args$theta_1
   theta_2 <- args$theta_2
   theta_3 <- args$theta_3
   nclust <- args$nclust
   p <- args$p
-  h2 <- args$h2
+  q <- args$q
   
-  if (nclust == 1){
-      cluster <- rep(1, p)
-  } else if (p == 30){
-      cluster <- rep(1:4, times = c(12, 6, 6, 6))
-  } else if (p == 50){
-      cluster <- rep(1:4, times = c(20, 10, 10, 10))
-  } else if (p == 100){
-      cluster <- rep(1:4, times = c(45, 20, 20, 15))
-  }
+  # Define clusters
+  cluster <- rep(1:4, times = c(p - q * p, rep(q * p/3, 3)))
+  nclust <- length(unique(cluster))
   
   # Simulate genetic data and confounders
   maf <- runif(p, 0.05, 0.5)
@@ -104,8 +98,9 @@ sim_indv_dat <- function(args){
   # var(G %*% phi %*% delta_m) / var(M)
   
   # Simulate outcome
+  gamma <- runif(p, 0.2, 0.3); gamma[cluster == 1] <- 0
   delta_y <- delta_m
-  Y <- theta_2 * X + theta_3 * M + W %*% delta_y + epsilon_y
+  Y <- theta_2 * X + theta_3 * M + W %*% delta_y + G %*% gamma + epsilon_y
   var(G %*% phi %*% delta_y) / var(Y)
   
   # Summary stats for X
@@ -150,7 +145,8 @@ sim_indv_dat <- function(args){
               "nclust" = nclust,
               "p" = p,
               "maf" = maf,
-              "n" = n
+              "n" = n,
+              "q" = q
   )
   )
 }

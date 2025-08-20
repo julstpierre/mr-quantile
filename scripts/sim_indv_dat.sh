@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=sim_indv_dat
-#SBATCH --array=1-4
+#SBATCH --array=1-8
 #SBATCH --time=01:00:00
 #SBATCH --mem=4G
 #SBATCH --cpus-per-task=4
@@ -14,7 +14,7 @@ module load r
 Rscript sim_indv_dat.R ${SLURM_ARRAY_TASK_ID}
 
 # Run sequentially
-# for i in {1..4}
+# for i in {1..8}
 # do
 #   Rscript sim_indv_dat.R $i
 # done

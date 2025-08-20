@@ -15,26 +15,19 @@ source("utils.R")
 num_jobs <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", unset = "4"))
 num_iters <- 1000
 params <- expand.grid(
-  p = 50,
+  p = 60,
   theta_1 = c(0),
   theta_2 = c(0, 0.1),
   theta_3 = c(0),
-  nclust = c(1, 4),
+  q = c(0, 0.2, 0.4, 0.6),
   n = 50000
 )
 
 #----------------------------------------------------------------------
 # Simulation scenarios
 #----------------------------------------------------------------------
-scenario_list <- list(
-  filter(params, theta_2 == 0, nclust == 1),   # S1
-  filter(params, theta_2 == 0.1, nclust == 1), # S2
-  filter(params, theta_2 == 0,  nclust == 4),  # S3
-  filter(params, theta_2 == 0.1,  nclust == 4) # S4
-)
-
-#for (scenario_id in 1:4){
-  df_param <- scenario_list[[scenario_id]] %>% list()
+#for (scenario_id in 1:8){
+  df_param <- params[scenario_id, ] %>% list()
   
   set.seed(2025081300 + scenario_id)
   
