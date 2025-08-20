@@ -25,7 +25,7 @@ if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 scenario_metadata <- expand.grid(
   p = 50,
   theta_1 = c(0),
-  theta_2 = c(0, 0.2),
+  theta_2 = c(0, 0.1),
   theta_3 = c(0),
   nclust = c(1, 4),
   n = 50000
@@ -64,14 +64,14 @@ all_results <- map_dfr(all_files, read_and_expand) %>%
 # -----------------------------
 # Summary statistics
 # -----------------------------
-summary_stats_theta_1 <- all_results %>%
+summary_stats_theta_2 <- all_results %>%
   group_by(scenario, method, ebic) %>%
   summarise(
-    theta_1 = mean(theta_1),
+    theta_2 = mean(theta_2),
     mean = mean(Estimate, na.rm = TRUE),
-    bias = mean(Estimate - theta_1, na.rm = TRUE),
+    bias = mean(Estimate - theta_2, na.rm = TRUE),
     sd = sd(Estimate, na.rm = TRUE),
-    coverage = mean(theta_1 >= LCL & theta_1 <= UCL, na.rm = TRUE),
+    coverage = mean(theta_2 >= LCL & theta_2 <= UCL, na.rm = TRUE),
     ci_width = mean(UCL - LCL, na.rm = TRUE),
     nclust = mean(nclust, na.rm = TRUE),
     rand = mean(rand, na.rm = TRUE),
@@ -79,16 +79,16 @@ summary_stats_theta_1 <- all_results %>%
     .groups = "drop"
   )
 
-filter(summary_stats_theta_1, scenario == "S1") %>%
+filter(summary_stats_theta_2, scenario == "S1") %>%
     print(width = Inf)
 
-filter(summary_stats_theta_1, scenario == "S2") %>%
+filter(summary_stats_theta_2, scenario == "S2") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_1, scenario == "S3") %>%
+filter(summary_stats_theta_2, scenario == "S3") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_1, scenario == "S4") %>%
+filter(summary_stats_theta_2, scenario == "S4") %>%
   print(width = Inf)
 
 # -----------------------------
