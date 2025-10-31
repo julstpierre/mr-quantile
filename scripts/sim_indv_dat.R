@@ -1,35 +1,32 @@
-#!/usr/bin/env Rscript
-
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 1) stop("Need scenario number 1-8 as argument")
-scenario_id <- as.integer(args[1])
-
+rm(list = ls())
 library(parallel)
-library(MASS)
 library(dplyr)
+library(MASS)
 source("utils.R")
 
 #-----------------------------------
 # Define the simulation parameters
 #-----------------------------------
-num_jobs <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", unset = "4"))
-num_iters <- 1000
+num_jobs <- 4
+num_iters <- 200
 params <- expand.grid(
-  p = 60,
-  theta_1 = c(0),
-  theta_2 = c(0, 0.1),
-  theta_3 = c(0),
+  p = 90,
+  theta_1 = c(0, 0.1),
+  n = 10000,
+  m = 10,
+  k = 4,
   q = c(0, 0.2, 0.4, 0.6),
-  n = 50000
+  rho = 0.5
 )
 
 #----------------------------------------------------------------------
-# Simulation scenarios
+# Simulate data
 #----------------------------------------------------------------------
-#for (scenario_id in 1:8){
+
+for (scenario_id in 1:nrow(params)){
   df_param <- params[scenario_id, ] %>% list()
   
-  set.seed(2025081300 + scenario_id)
+  set.seed(2025082800 + scenario_id)
   
   res <- replicate(num_iters, df_param) %>%
     mclapply(mc.cores = num_jobs, sim_indv_dat, mc.set.seed = TRUE)
@@ -37,6 +34,5 @@ params <- expand.grid(
   # Save file
   D_name <- paste0("D_S", scenario_id)
   assign(paste0("D_S", scenario_id), res)
-  
   save(list = D_name, file = sprintf("../data/simulations/D_S%d.RData", scenario_id))
-#}
+}

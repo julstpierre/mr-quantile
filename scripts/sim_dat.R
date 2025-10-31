@@ -1,74 +1,38 @@
+rm(list = ls())
 library(parallel)
-library(MASS)
 library(dplyr)
 source("utils.R")
 
 #-----------------------------------
 # Define the simulation parameters
 #-----------------------------------
-num_jobs <- 6
-num_iters <- 5000
+num_jobs <- 4
+num_iters <- 400
 params <- expand.grid(
-  p = 50,
-  theta_1 = c(0.2),
-  theta_2 = c(0, 0.8),
-  theta_3 = c(-1, 1),
-  nclust = c(1, 4),
-  n = 10000,
-  h2 = 0.10
+  p = 100000,
+  theta = c(0, 0.2),
+  n = 50000,
+  h2_x = 0.3,
+  h2_y = 0.3,
+  m = 100,
+  q = c(0, 0.2, 0.4, 0.6),
+  pi = 0.2
 )
 
 #----------------------------------------------------------------------
-# Simulation scenarios
+# Simulate data
 #----------------------------------------------------------------------
 
-set.seed(2025081301)
-D_S1 <- filter(params, theta_2 == 0, theta_3 == -1, nclust == 1) %>%
-  list() %>%
-  replicate(num_iters, .) %>%
-  mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-set.seed(2025081302)
-D_S2 <- filter(params, theta_2 == 0.8, theta_3 == -1, nclust == 1) %>%
-  list() %>%
-  replicate(num_iters, .) %>%
-  mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-set.seed(2025081303)
-D_S3 <- filter(params, theta_2 == 0, theta_3 == 1, nclust == 1) %>%
-  list() %>%
-  replicate(num_iters, .) %>%
-  mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-set.seed(2025081304)
-D_S4 <- filter(params, theta_2 == 0.8, theta_3 == 1, nclust == 1) %>%
-  list() %>%
-  replicate(num_iters, .) %>%
-  mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-set.seed(2025081305)
-D_S5 <- filter(params, theta_2 == 0, theta_3 == -1, nclust == 4) %>%
-  list() %>%
-  replicate(num_iters, .) %>%
-  mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-set.seed(2025081306)
-D_S6 <- filter(params, theta_2 == 0.8, theta_3 == -1, nclust == 4) %>%
-  list() %>%
-  replicate(num_iters, .) %>%
-  mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-set.seed(2025081307)
-D_S7 <- filter(params, theta_2 == 0, theta_3 == 1, nclust == 4) %>%
-  list() %>%
-  replicate(num_iters, .) %>%
-  mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-set.seed(2025081308)
-D_S8 <- filter(params, theta_2 == 0.8, theta_3 == 1, nclust == 4) %>%
-  list() %>%
-  replicate(num_iters, .) %>%
-  mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
-
-# Save simulated data
-save(D_S1, D_S2, D_S3, D_S4, D_S5, D_S6, D_S7, D_S8, file = '../data/simulations/sim_dat.R')
+for (scenario_id in 1:nrow(params)){
+  df_param <- params[scenario_id, ] %>% list()
+  
+  set.seed(2025082100 + scenario_id)
+  
+  res <- replicate(num_iters, df_param) %>%
+    mclapply(mc.cores = num_jobs, sim_dat, mc.set.seed = TRUE)
+  
+  # Save file
+  D_name <- paste0("D_S", scenario_id)
+  assign(paste0("D_S", scenario_id), res)
+  save(list = D_name, file = sprintf("../data/simulations/D_S%d.RData", scenario_id))
+}

@@ -23,13 +23,14 @@ if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 # Scenario metadata
 # -----------------------------
 scenario_metadata <- expand.grid(
-  p = 50,
-  theta_1 = c(0),
-  theta_2 = c(0, 0.1),
-  theta_3 = c(0),
-  nclust = c(1, 4),
-  n = 50000
-) %>% mutate(scenario = paste0("S", 1:4)) %>% dplyr::select(-nclust)
+  p = 100000,
+  theta = c(0, 0.2),
+  n = 50000,
+  h2_x = 0.25,
+  h2_y = 0.25,
+  m = 100,
+  q = c(0, 0.2, 0.4, 0.6)
+) %>% mutate(scenario = paste0("S", 1:8))
 
 # -----------------------------
 # Load and process all results
@@ -64,31 +65,47 @@ all_results <- map_dfr(all_files, read_and_expand) %>%
 # -----------------------------
 # Summary statistics
 # -----------------------------
-summary_stats_theta_2 <- all_results %>%
-  group_by(scenario, method, ebic) %>%
+summary_stats <- all_results %>%
+  # group_by(scenario, method, ebic) %>%
+  group_by(scenario, method) %>%
   summarise(
-    theta_2 = mean(theta_2),
+    theta = mean(theta),
+    q = mean(q),
     mean = mean(Estimate, na.rm = TRUE),
-    bias = mean(Estimate - theta_2, na.rm = TRUE),
+    bias = mean(Estimate - theta, na.rm = TRUE),
     sd = sd(Estimate, na.rm = TRUE),
-    coverage = mean(theta_2 >= LCL & theta_2 <= UCL, na.rm = TRUE),
+    coverage = mean(theta >= LCL & theta <= UCL, na.rm = TRUE),
+    power = mean(LCL > 0 | UCL < 0, na.rm = TRUE),
     ci_width = mean(UCL - LCL, na.rm = TRUE),
     nclust = mean(nclust, na.rm = TRUE),
+    qhat = mean(qhat, na.rm = TRUE),
     rand = mean(rand, na.rm = TRUE),
     n = n(),
     .groups = "drop"
   )
 
-filter(summary_stats_theta_2, scenario == "S1") %>%
+filter(summary_stats, scenario == "S1") %>%
     print(width = Inf)
 
-filter(summary_stats_theta_2, scenario == "S2") %>%
+filter(summary_stats, scenario == "S2") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_2, scenario == "S3") %>%
+filter(summary_stats, scenario == "S3") %>%
   print(width = Inf)
 
-filter(summary_stats_theta_2, scenario == "S4") %>%
+filter(summary_stats, scenario == "S4") %>%
+  print(width = Inf)
+
+filter(summary_stats, scenario == "S5") %>%
+  print(width = Inf)
+
+filter(summary_stats, scenario == "S6") %>%
+  print(width = Inf)
+
+filter(summary_stats, scenario == "S7") %>%
+  print(width = Inf)
+
+filter(summary_stats, scenario == "S8") %>%
   print(width = Inf)
 
 # -----------------------------

@@ -5,13 +5,16 @@ library(dplyr)
 library(MendelianRandomization)
 library(quantreg)
 library(glmnet)
-library(mrclust)
+# library(mrclust)
 library(genlasso)
 library(fossil)
 library(mclust)
+library(posterior)
 
 # Load custom estimator functions
 source("utils.R")
+source("mrclust.R")
+source("mrlaplace.R")
 
 # -----------------------------
 # Parse command-line arguments
@@ -46,16 +49,30 @@ res_ivw         <- lapply(chunk, theta_ivw) %>% do.call(rbind.data.frame, .)
 res_median      <- lapply(chunk, theta_median) %>% do.call(rbind.data.frame, .)
 res_egger      <- lapply(chunk, theta_egger) %>% do.call(rbind.data.frame, .)
 res_mrclust     <- lapply(chunk, fit_mrclust) %>% do.call(rbind.data.frame, .)
-res_fused_lasso_0 <- lapply(chunk, fit_fused_lasso, ebic_coef = 0) %>% do.call(rbind.data.frame, .)
-res_fused_lasso_05 <- lapply(chunk, fit_fused_lasso, ebic_coef = 0.5) %>% do.call(rbind.data.frame, .)
-res_fused_lasso_1 <- lapply(chunk, fit_fused_lasso, ebic_coef = 1) %>% do.call(rbind.data.frame, .)
+res_mrlaplace <- lapply(chunk, fit_mrlaplace) %>% do.call(rbind.data.frame, .)
+res_mrlaplace_null <- lapply(chunk, fit_mrlaplace, null_cluster = TRUE) %>% do.call(rbind.data.frame, .)
+res_mrlaplace_bayes <- lapply(chunk, fit_mrlaplace_bayes) %>% do.call(rbind.data.frame, .)
 
 # -----------------------------
 # Combine results into a single data frame and add a column for the model
 # -----------------------------
 tag_method <- function(res_list, method) {
-  bind_rows(res_list) %>%
-    mutate(method = method)
+  if (length(res_list) <= 8) {
+    bind_rows(res_list) %>%
+      mutate(method = method)
+  } else {
+    # Bind all elements first
+    df <- bind_rows(res_list)
+    
+    # Split into two parts: first 4 cols and last 4 cols
+    df_main <- df[, -c(5:8), drop = FALSE] %>%
+      mutate(method = method)
+    
+    df_median <- df[, -c(1:4), drop = FALSE] %>%
+      mutate(method = paste0(method, "_median"))
+    
+    bind_rows(df_main, df_median)
+  }
 }
 
 res_all <- bind_rows(
@@ -63,10 +80,10 @@ res_all <- bind_rows(
   ,tag_method(res_median, "median")
   ,tag_method(res_egger, "egger")
   ,tag_method(res_mrclust, "mrclust")
-  ,tag_method(res_fused_lasso_0, "res_fused_lasso_0")
-  ,tag_method(res_fused_lasso_05, "res_fused_lasso_05")
-  ,tag_method(res_fused_lasso_1, "res_fused_lasso_1")
-)
+  ,tag_method(res_mrlaplace, "mrlaplace")
+  ,tag_method(res_mrlaplace_null, "mrlaplace_null")
+  ,tag_method(res_mrlaplace_bayes, "mrlaplace_bayes")
+  )
 
 # -----------------------------
 # Save results

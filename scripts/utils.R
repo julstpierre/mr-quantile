@@ -1,154 +1,188 @@
 #--------------------------------------------------------------------------------
-# Simulate data
+# Simulate summary-level data
 #--------------------------------------------------------------------------------
+
+# --- Laplace sampler ---
+rLaplace <- function(n, mu = 0, b = 1) {
+  u <- runif(n, -0.5, 0.5)
+  mu - b * sign(u) * log(1 - 2 * abs(u))
+}
+
 sim_dat <- function(args){
   
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(theta_1 = 0.2, theta_2 = 0, theta_3 = -1, nclust = 4, p = 50, h2 = 0.10, n = 50000)
+  # args <- list(theta = 0.2, p = 100000, h2_x = 0.3, h2_y = 0.3, n = 50000, q = 0.6, m = 100, pi = 0.2)
   n <- args$n
-  theta_1 <- args$theta_1
-  theta_3 <- args$theta_3
-  nclust <- args$nclust
+  theta <- args$theta
   p <- args$p
-  h2 <- args$h2
+  h2_x <- args$h2_x
+  h2_y <- args$h2_y
+  q <- args$q
+  m <- args$m
+  pi <- args$pi
   
-  if (nclust == 1){
-    theta_2 <- rep(args$theta_2, p)
-  } else if (nclust == 4){
-      if (p == 30){
-        theta_2 <- rep(c(args$theta_2, -0.4, 0, 0.4), times = c(12, 6, 6, 6))
-      } else if (p == 50){
-        theta_2 <- rep(c(args$theta_2, -0.4, 0, 0.4), times = c(20, 12, 10, 8))
-      } else if (p == 100){
-        theta_2 <- rep(c(args$theta_2, -0.4, 0, 0.4), times = c(45, 20, 20, 15))
-      }
+  # Simulate p SNPs with m non-null effects, m non-null uncorrelated pleiotropic effects, 
+  # pi is the proportion of the SNPs with both beta_x and alpha different from zero
+  maf <- runif(p, 0.05, 0.5)
+  
+  id.x <- sample(1:p, m) %>% sort()
+  id.alpha <- c(sample(id.x, pi * m), sample(setdiff(1:p, id.x), (1 - pi) * m)) %>% sort()
+  id.all <- sort(unique(c(id.x, id.alpha)))
+  
+  sd.x <- 1 / sqrt(2 * maf[id.x] * (1 - maf[id.x]))
+  sd.alpha <- 1 / sqrt(2 * maf[id.alpha] * (1 - maf[id.alpha]))
+  
+  # Simulate direct effects
+  sigma2_x <- h2_x / m
+  beta_x <- rep(0, p)
+  beta_x[id.x] <- rnorm(m, mean = 0, sd = sqrt(sigma2_x)) * sd.x
+  sum(2 * maf * (1 - maf) * beta_x^2)
+  
+  # Simulate uncorrelated pleiotropic effects and m * q correlated pleiotropic effects
+  # if (q == 0 ){
+  #     etavals <- rep(0, 4)
+  # } else if (q == 0.2){
+  #     etavals <- 0.85 + 0.015 * (theta == 0)
+  # } else if (q == 0.4){
+  #     etavals <- 0.6 + 0.0125 * (theta == 0)
+  # } else if (q == 0.6){
+  #     etavals <- 0.532 + 0.008 * (theta == 0)
+  # }
+  
+  if (q == 0 ){
+    etavals <- rep(0, 4)
+  } else {
+    etavals <- 0.6
   }
   
-  maf <- runif(p, 0.05, 0.5)
-  beta_x_raw <- rnorm(p, mean = 0, sd = 1)
-  beta_x <- sqrt( h2 / sum( beta_x_raw^2 * 2 * maf * ( 1 - maf ) ) ) * beta_x_raw
-  beta_m <- theta_1 * beta_x + rnorm(p, sd = 1)
-  beta_y <- theta_2 * beta_x + theta_3 * beta_m
+  etavals <- etavals * c(0, -1, 1, 2)
+  eta <- rep(0, p)
+  eta[id.all] <- rep(etavals, times = c( round((1 - q) * length(id.all)), rep( q * length(id.all) / 3, 3 ) ) )
+  etasq <- etavals^2 %*% c(1 - q, rep(q / 3, 3))
   
+  sigma2_alpha <- (h2_y - (theta^2 + etasq) * h2_x) / m
+  alpha <- rep(0, p)
+  # alpha[id.alpha] <- rnorm(m, mean = 0, sd = sqrt(sigma2_alpha)) * sd.alpha
+  alpha[id.alpha] <- rLaplace(m, mu = 0, b = sqrt(rep(sigma2_alpha, m) / 2)) * sd.alpha
+  sum(2 * maf * (1 - maf) * alpha^2)
+  
+  # Simulate outcome
+  beta_y <- theta * beta_x + eta * beta_x + alpha
+  sum(2 * maf * (1 - maf) * beta_y^2)
+  
+  # Generate summary statistics
   sigma2 <-  1 / ( 2 * n * maf * ( 1 - maf ) ) 
   beta_hat_x <- rnorm( p, beta_x, sqrt( sigma2 ) )
-  beta_hat_m <- rnorm( p, beta_m, sqrt( sigma2 ) )
   beta_hat_y <- rnorm( p, beta_y, sqrt( sigma2 ) )
   
-  return(list("beta_hat_x" = beta_hat_x, 
-              "sigma2_x" = sigma2, 
-              "beta_hat_y" = beta_hat_y, 
-              "sigma2_y" = sigma2, 
-              "beta_hat_m" = beta_hat_m, 
-              "sigma2_m" = sigma2,
-              "theta_T" = theta_2 + theta_1 * theta_3,
-              "theta_D" = theta_2,
-              "nclust" = nclust,
-              "p" = p,
-              "maf" = maf,
-              "n" = n
+  # Select SNPs with p-value < 5e-8
+  pval_x <- 2 * pnorm(-abs(beta_hat_x / sqrt(sigma2)))
+  snps <- which(pval_x < 5e-8)
+  
+  # Compute heritabilities
+  (tau2 <- theta^2 * h2_x / h2_y)
+  (omega2 <- etasq * h2_x / h2_y)
+    
+  return(list("beta_hat_x" = beta_hat_x[snps], 
+              "sigma2_x" = sigma2[snps], 
+              "beta_hat_y" = beta_hat_y[snps], 
+              "sigma2_y" = sigma2[snps], 
+              "theta" = theta,
+              "alpha" = alpha[snps],
+              "eta" = eta[snps],
+              "maf" = maf[snps],
+              "n" = n, 
+              "q" = q,
+              "p" = length(snps)
               )
          )
 }
 
+#--------------------------------------------------------------------------------
+# Simulate individual-level data
+#--------------------------------------------------------------------------------
 sim_indv_dat <- function(args){
   
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(theta_1 = 0, theta_2 = 0.1, theta_3 = 0, p = 60, n = 50000, q = 0.6)
-  n <- args$n
+  # args <- list(theta_1 = 0, p = 90, n = 10000, q = 0.6, m = 10, k = 4, rho = 0.25)
+  n <- args$n 
   theta_1 <- args$theta_1
-  theta_2 <- args$theta_2
-  theta_3 <- args$theta_3
-  nclust <- args$nclust
   p <- args$p
   q <- args$q
-  
-  # Define clusters
-  cluster <- rep(1:4, times = c(p - q * p, rep(q * p/3, 3)))
-  nclust <- length(unique(cluster))
+  m <- args$m
+  k <- args$k
+  rho <- args$rho
   
   # Simulate genetic data and confounders
-  maf <- runif(p, 0.05, 0.5)
+  maf <- runif(p, 0.1, 0.3)
   G <- sapply(maf, function(maf) rbinom(2 * n, 2, maf))
-  epsilon_w <- mvrnorm(2 * n, mu = rep(0, nclust), Sigma = diag(1, nclust))
-  epsilon_x <- rnorm(2 * n)
-  epsilon_m <- rnorm(2 * n)
+  epsilon_u <- mvrnorm(2 * n, mu = rep(0, k), Sigma = diag(1, k))
+  epsilon_x <- mvrnorm(2 * n, mu = rep(0, m), Sigma = diag(1 - rho, m) + rho)
   epsilon_y <- rnorm(2 * n)
   
   # Simulate latent factors
-  phi <- runif(p, 0.2, 0.3) * sapply(1:nclust, function(i) cluster == i)
-  phi[cluster == 1, ] <- 0
-  W <- G %*% phi + epsilon_w
-  # apply(G %*% phi, 2, var) / apply(W, 2, var)
+  cluster <- rep(1:k, times = c(p - q * p, rep(q * p/(k - 1), k - 1)))
+  phi <- runif(p, -0.1, 0.1) * sapply(1:k, function(i) cluster == i)
+  phi[, 1] <- 0
+  U <- G %*% phi + epsilon_u
+  # apply(G %*% phi, 2, var) / apply(U, 2, var)
   
   # Simulate exposure
-  gamma <- runif(p, 0.2, 0.3) * sample(c(-1, 1), size = p, replace = TRUE)
-  gamma[cluster != 1] <- 0
-  delta_x <- rep(1, nclust)
-  X <- G %*% gamma + W %*% delta_x + epsilon_x
-  # var(G %*% phi %*% delta_x) / var(X)
-  
-  # Simulate mediator
-  delta_m <- c(1, -0.7, 0.7, 1.4)[1:nclust]
-  M <- theta_1 * X + W %*% delta_m + epsilon_m
-  # var(G %*% phi %*% delta_m) / var(M)
+  gamma <- replicate(m, runif(p, 0.1, 0.2) * sample(c(-1, 1), size = p, replace = TRUE))
+  gamma[cluster != 1, ] <- 0
+  delta_x <- matrix(runif(k*m, max = 1, min = -1), nrow = k)
+  X <- G %*% gamma + U %*% delta_x + epsilon_x
+  # apply(G %*% gamma, 2, var) / apply(X, 2, var)
   
   # Simulate outcome
-  gamma <- runif(p, 0.2, 0.3); gamma[cluster == 1] <- 0
-  delta_y <- delta_m
-  Y <- theta_2 * X + theta_3 * M + W %*% delta_y + G %*% gamma + epsilon_y
-  var(G %*% phi %*% delta_y) / var(Y)
+  theta <- c(theta_1, -0.1, 0.1, rep(0, m - 3))
+  alpha <- rep(0, p)
+  alpha[sample(1:p, q * p)] <- runif(q * p, 0.2, 0.3)
+  delta_y <- runif(k, max = 1, min = -1)
+  Y <- X %*% theta + G %*% alpha + U %*% delta_y + epsilon_y
   
   # Summary stats for X
-  sampX = seq(1, n)
-  Gc <- scale(G[sampX, ], scale = FALSE)
-  Xc <- X[sampX] - mean(X[sampX])
-  XtG <- crossprod(Gc, Xc)            
-  GtG <- colSums(Gc^2)                   
-  beta_hat_x <- XtG / GtG
-  residuals2 <- colSums((matrix(Xc, n, p) - Gc * rep(beta_hat_x, each = n))^2)
-  sigma2_x <- residuals2 / (n - 2) / GtG
-  
-  # Summary stats for M
-  sampM = seq(1, n)
-  Gc <- scale(G[sampM, ], scale = FALSE)
-  Mc <- M[sampM] - mean(M[sampM])
-  XtG <- crossprod(Gc, Mc)            
-  GtG <- colSums(Gc^2)                   
-  beta_hat_m <- XtG / GtG
-  residuals2 <- colSums((matrix(Mc, n, p) - Gc * rep(beta_hat_m, each = n))^2)
-  sigma2_m <- residuals2 / (n - 2) / GtG
-  
+  sampX <- seq(1, n)
+  regX <- apply(X[sampX, ], 2, function(xcol) sumstat(xcol, G[sampX, ]))
+  beta_hat_x <- sapply(regX, `[[`, "beta_hat")
+  sigma2_x    <- sapply(regX, `[[`, "sigma2")
+    
   # Summary stats for Y
   sampY <- seq(n+1, 2*n)
-  Yc <- Y[sampY] - mean(Y[sampY])
-  Gc <- scale(G[sampY, ], scale = FALSE)
-  XtG <- crossprod(Gc, Yc)
-  GtG <- colSums(Gc^2)
-  beta_hat_y <- XtG / GtG
-  residuals2 <- colSums((matrix(Yc, n, p) - Gc * rep(beta_hat_y, each = n))^2)
-  sigma2_y <- residuals2 / (n - 2) / GtG
+  regY <- sumstat(Y[sampY], G[sampY, ])
+  beta_hat_y <- regY$beta_hat
+  sigma2_y <- regY$sigma2
   
-  return(list("beta_hat_x" = as.vector(beta_hat_x), 
+  return(list("beta_hat_x" = beta_hat_x, 
               "sigma2_x" = sigma2_x, 
-              "beta_hat_y" = as.vector(beta_hat_y), 
-              "sigma2_y" = sigma2_y, 
-              "beta_hat_m" = as.vector(beta_hat_m), 
-              "sigma2_m" = sigma2_m,
-              "theta_1" = theta_1 + c(0, delta_m[-1])[cluster],
-              "theta_2" = theta_2 + c(0, delta_y[-1])[cluster],
-              "theta_3" = theta_3 + c(0, delta_y[-1])[cluster],
-              "nclust" = nclust,
-              "p" = p,
-              "maf" = maf,
+              "beta_hat_y" = beta_hat_y, 
+              "sigma2_y" = sigma2_y,
+              "cluster" = cluster,
+              "theta" = theta,
+              "alpha" = alpha,
+              "eta" = c(0, delta_y[-1]),
               "n" = n,
-              "q" = q
+              "p" = p,
+              "q" = q,
+              "maf" = maf
   )
   )
+}
+
+sumstat <- function(X, G){
+  n <- nrow(G); p <- ncol(G)
+  Xc <- X - mean(X)
+  Gc <- scale(G, scale = FALSE)
+  XtG <- crossprod(Gc, Xc)
+  GtG <- colSums(Gc^2)
+  beta_hat <- XtG / GtG
+  residuals2 <- colSums((matrix(Xc, n, p) - Gc * rep(beta_hat, each = n))^2)
+  sigma2 <- residuals2 / (n - 2) / GtG
+  return(list(beta_hat = beta_hat, sigma2 = sigma2))
 }
 
 #--------------------------------------------------------------------------------
@@ -272,8 +306,8 @@ fit_egger <- function(D, snps = 1:D$p){
 #--------------------------------------------------------------------------------
 # Fit MR_Median on simulated data
 #--------------------------------------------------------------------------------
-theta_median <- function(D, snps = 1:D$p){
-    MR_Median <- summary(rq(D$beta_hat_y[snps]~-1+D$beta_hat_x[snps], weights = D$sigma2_y[snps]^-1), se = "boot")$coef
+theta_median <- function(D, snps = 1:D$p, w = rep(1, length(snps))){
+    MR_Median <- summary(rq(D$beta_hat_y[snps]~-1+D$beta_hat_x[snps], weights = w * D$sigma2_y[snps]^-1), se = "boot")$coef
     return(cbind("Estimate" = MR_Median[1], 
                  "StdError" = MR_Median[2], 
                  "LCL" = MR_Median[1] - qt(0.975, df = length(snps) - 1) * MR_Median[2],
@@ -321,22 +355,33 @@ fit_mrclust <- function(D){
     table(res_em_best$cluster_mean)
     
     # Find cluster with the most number of SNPs
-    main_cluster <- names(which.max(table(res_em_best$cluster_mean)))
-    snps <- filter(res_em_best, cluster_mean == main_cluster) %>%
+    nclust <- length(unique(res_em_best$cluster))
+    main_cluster <- names(which.max(table(res_em_best$cluster)))
+    snps <- filter(res_em_best, cluster == as.numeric(main_cluster)) %>%
             mutate(rows = substr(observation, 4, 6)) %>%
             pull(rows) %>%
             as.numeric()
     
-    # Fit median estimator on main cluster
-    nclust <- length(unique(res_em_best$cluster))
-    theta_main <- theta_median(D, snps)
+    # Fit IVW estimator on main cluster
+    (if (nclust == 1){
+      theta_main <- theta_ivw(D, snps)
+    } else {
+      cluster_summary <- distinct(arrange(res_em_best, cluster), cluster, pi_hat, cluster_mean)
+      theta_main <- data.frame(Estimate = cluster_summary$cluster_mean[as.numeric(main_cluster)],
+                                StdError = sqrt(1 / colSums(res_em$r_ij * ratios.se^-2))[as.numeric(main_cluster)]
+      ) %>%
+          mutate(LCL = Estimate - qnorm(0.975) * StdError, UCL = Estimate + qnorm(0.975) * StdError) %>%
+          as.matrix()
+    })
     
     return(
       cbind(
            theta_main,
+           theta_median(D, snps),
            nclust = nclust,
-           adj.rand = adjustedRandIndex(res_em_best$cluster_mean, D$theta_2),
-           rand = rand.index(res_em_best$cluster_mean, D$theta_2)
+           qhat = 1 - length(snps) / D$p,
+           adj.rand = adjustedRandIndex(res_em_best$cluster_mean, D$eta + D$theta),
+           rand = rand.index(res_em_best$cluster_mean, D$eta + D$theta)
            )
       )
 }
@@ -381,240 +426,296 @@ fit_mvmrclust <- function(D){
 }
 
 #--------------------------------------------------------------------------------
-# Fit generalized fused lasso on simulated data
+# Fit Bayesian Laplace mixture on simulated data
 #--------------------------------------------------------------------------------
-fit_fused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 1, post_hoc = "mean", lambda_list = NULL, max_clusters = NULL){
-  
-  n <- D$n
-  p <- length(D$beta_hat_y)
-  if (is.null(max_clusters)) { max_clusters <- p/2 }
-  y <- D$beta_hat_y/sqrt(D$sigma2_y)
-  X <- diag(D$beta_hat_x/sqrt(D$sigma2_y))
-  eigenvals <- eigen(t(X) %*% X)$values
-  
-  # Apply a l2 regularization to the ratios
-  if (is.null(lambda_list)) { 
-    glmnet_fit <- glmnet(X, y, alpha = 0, standardize = FALSE, intercept = FALSE)
-    lambda_list <- c(0, rev(glmnet_fit$lambda))
-  }
-  
-  path <- vector("list", length(lambda_list))
-  bic <- c()
-  for (i in seq_along(lambda_list)) {
-      path[[i]] <- list()
-      lambda <- lambda_list[i]
-      ytilde <- c(y, rep(0, p))
-      Xtilde <- rbind(X, sqrt(lambda) * diag(p))
-      ridge.fit <- lm(ytilde ~ -1 + Xtilde)
-      path[[i]]$ratios <- ridge.fit$coefficients %>% as.vector()
-      path[[i]]$ratios.se <- abs(D$beta_hat_x) * sqrt(D$sigma2_y) / (D$beta_hat_x^2 + lambda * D$sigma2_y)
-      bic[i] <- sum(residuals(ridge.fit)[1:p]^2) / p + log(n) * sum(eigenvals / (eigenvals + lambda)) / p
-  }
-  
-  lambda <- lambda_list[which.min(bic)]
-  Xtilde <- rbind(X, sqrt(lambda) * diag(p))
-  ratios <- lm(ytilde ~ -1 + Xtilde)$coefficients %>% as.vector()
-    
-  # Order data by regularized ratios
-  ord <- order(ratios)
-  ytilde <- c(y[ord], rep(0, p))
-  Xtilde <- rbind(X[ord, ord], sqrt(lambda) * diag(p))
-  
-  # For each pair (i, j), we want a row with 1 at position i, -1 at position j
-  pairs <- do.call(rbind, lapply(1:(p - 1), function(i) cbind(i, (i + 1):min(p, i + k))))
-  m <- nrow(pairs)
-  Dmat <- sparseMatrix(
-    i = rep(seq_len(m), 2),
-    j = c(pairs[,1], pairs[,2]),
-    x = c(rep(1, m), rep(-1, m)),
-    dims = c(m, p)
-  ) %>% as.matrix()
-  
-  # Compute adaptive weights using differences in ratios
-  eps     <- 0    # stability constant
-  diffs   <- sweep(Dmat, 2, ratios[ord], `*`) %>% rowSums() %>% abs()
-  weights <- 1 / (diffs^gamma + eps)
+fit_mrlaplace_bayes <- function(D){
   
   # Fit model
-  genlasso.fit <- genlasso(ytilde, Xtilde, D = diag(weights) %*% Dmat)
-  
-  # Compute EBIC to select number of clusters
-  rss <- colSums((genlasso.fit$fit[1:p, ] - ytilde[1:p])^2)
-  df <- genlasso.fit$df  # effective degrees of freedom
-  ebic <- rss / p + log(n) * df / p + 2 * ebic_coef * log(choose(p, df)) / p
-    
-  # Return best fit
-  best_fit <- list(
-    lambda = lambda,
-    theta_hat = round(genlasso.fit$beta[, which.min(ebic[df < max_clusters])], 4),
-    ebic = min(ebic[df < max_clusters]),
-    ord = ord,
-    ratios = ratios
-  )
-  
-  # Select best model
-  best_fit$lambda
-  table(best_fit$theta_hat)
-  
-  # Assign clusters based on distance criteria
-  if (!is.null(post_hoc)){
-    
-    # Compute distance matrix
-    cluster_means <- sort(unique(best_fit$theta_hat))
-    names(cluster_means) <- cluster_means
-    distance_list <- lapply(path[1:which.min(bic)], function(res) {
-      sapply(cluster_means, function(mu) {
-        (res$ratios - mu)^2 / res$ratios.se^2
-      })
-    })
-    
-    # Assign clusters based on minimum distance
-    if (post_hoc == "mean") {
-      cluster <- apply(apply(simplify2array(distance_list), c(1, 2), mean), 1, which.min)
-    } else if (post_hoc == "mode") {
-      cluster <- apply(apply(simplify2array(distance_list), c(1, 3), which.min), 1, get.mode)
-    }
-    names(cluster) <- cluster_means[cluster]
-    theta_hat <- as.numeric(cluster_means[cluster])
-    table(theta_hat)
-    
-  } else {
-    # Assign clusters based on fusion
-    cluster_means <- sort(unique(best_fit$theta_hat))
-    cluster <- match(best_fit$theta_hat[order(best_fit$ord)], cluster_means)
-    names(cluster) <- cluster_means[cluster]
-    theta_hat <- as.numeric(cluster_means[cluster])
-    table(theta_hat)
-  }
+  res_em <- mr_laplace(D$beta_hat_y, D$beta_hat_x, sigma2_y = D$sigma2_y)
+  table(res_em$results$cluster_median)
   
   # Find cluster with the most number of SNPs
-  main_cluster <- table(cluster) |> which.max() |> names() |> as.numeric()
-  snps <- which(cluster == main_cluster)
-  
-  # Fit median estimator on main cluster
-  nclust <- length(unique(cluster))
-  theta_main <- theta_median(D, snps)
+  nclust <- length(unique(res_em$results$cluster))
+  main_cluster <- names(which.max(table(res_em$results$cluster)))
+  snps <- filter(res_em$results, cluster == main_cluster) %>%
+    mutate(rows = substr(SNP, 4, 6)) %>%
+    pull(rows) %>%
+    as.numeric()
   
   return(
     cbind(
-      theta_main,
+      Estimate = first(filter(res_em$results, cluster == main_cluster))$cluster_median,
+      StdError = first(filter(res_em$results, cluster == main_cluster))$cluster_se,
+      LCL = first(filter(res_em$results, cluster == main_cluster))$cluster_lcl,
+      UCL = first(filter(res_em$results, cluster == main_cluster))$cluster_ucl,
       nclust = nclust,
-      adj.rand = adjustedRandIndex(theta_hat, D$theta_2),
-      rand = rand.index(theta_hat, D$theta_2)
+      qhat = 1 - length(snps) / D$p,
+      adj.rand = adjustedRandIndex(res_em$results$cluster_median, D$eta + D$theta),
+      rand = rand.index(res_em$results$cluster_median, D$eta + D$theta)
     )
   )
   
 }
 
-fit_mvfused_lasso <- function(D, k = 1, gamma = 2, ebic_coef = 0, post_hoc = NULL, lambda_list = NULL, max_clusters = NULL){
+#--------------------------------------------------------------------------------
+# Fit Laplace mixture on simulated data
+#--------------------------------------------------------------------------------
+fit_mrlaplace <- function(D, tau = 0.5, null_cluster = FALSE){
   
-  n <- D$n
-  p <- length(D$beta_hat_y)
-  if (is.null(max_clusters)) { max_clusters <- p/2 }
-  y <- D$beta_hat_y/sqrt(D$sigma2_y)
-  X <- diag(as.vector(D$beta_hat_x/sqrt(D$sigma2_y)))
-  M <- D$beta_hat_m/sqrt(D$sigma2_y)
-    
-  # For each pair (i, j), we want a row with 1 at position i, -1 at position j
-  pairs <- do.call(rbind, lapply(1:(p - 1), function(i) cbind(i, (i + 1):min(p, i + k))))
-  m <- nrow(pairs)
-  Dmat <- sparseMatrix(
-    i = rep(seq_len(m), 2),
-    j = c(pairs[,1], pairs[,2]),
-    x = c(rep(1, m), rep(-1, m)),
-    dims = c(m, p)
-  ) %>% as.matrix()
+  # Compute ratio estimates and their standard errors
+  ratios <- D$beta_hat_y / D$beta_hat_x
+  ratios.se <- sqrt(D$sigma2_y / D$beta_hat_x^2)
   
-  # Apply a l2 regularization to the ratios
-  if (is.null(lambda_list)) { lambda_list <- seq(0, 4, 0.1) }
-  results <- vector("list", length(lambda_list))
-  
-  for (i in seq_along(lambda_list)) {
-    lambda <- lambda_list[i]
-    ytilde <- c(y, rep(0, p))
-    Xtilde <- rbind(cbind(X, M), cbind(sqrt(lambda) * diag(p), matrix(0, p, 1)))
-    ridge.ratios <- lm(ytilde ~ -1 + Xtilde)$coefficients[1:p] %>% as.vector()
-    
-    # Order data by regularized ratios
-    ord <- order(ridge.ratios)
-    ytilde <- c(y[ord], rep(0, p))
-    Xtilde <- rbind(cbind(M[ord], X[ord, ord]), cbind(sqrt(lambda) * diag(p), matrix(0, p, 1)))
-      
-    # Compute adaptive weights using differences in ratios
-    eps     <- 0    # stability constant
-    diffs   <- sweep(Dmat, 2, ridge.ratios[ord], `*`) %>% rowSums() %>% abs()
-    weights <- 1 / (diffs^gamma + eps)
-    
-    # Fit model
-    genlasso.fit <- genlasso(ytilde, Xtilde, D = cbind(0, diag(weights) %*% Dmat))
-    
-    # Compute EBIC for each lambda
-    rss <- colSums((genlasso.fit$fit[1:p, ] - ytilde[1:p])^2)
-    df <- genlasso.fit$df  # effective degrees of freedom
-    ebic <- rss / p + log(n) * df / p + 2 * ebic_coef * log(choose(p, df - 1)) / p
-    
-    # Return best fit
-    results[[i]] <- list(
-      lambda = lambda,
-      theta_hat = round(genlasso.fit$beta[-1, which.min(ebic[df - 1 < max_clusters])], 4),
-      ebic = min(ebic[df - 1 < max_clusters]),
-      ord = ord,
-      ratios = ridge.ratios
-    )
-  }
-  
-  # Select best model
-  best_fit <- results[[which.min(sapply(results, function(x) x$ebic))]]
-  best_fit$lambda
-  table(best_fit$theta_hat)
-  
-  # Assign clusters based on distance criteria
-  if (!is.null(post_hoc)){
-    
-    # Compute distance matrix
-    cluster_means <- sort(unique(best_fit$theta_hat))
-    names(cluster_means) <- cluster_means
-    ratios.se <- sqrt(D$sigma2_y) / abs(D$beta_hat_x)
-    distance_list <- lapply(results, function(res) {
-      sapply(cluster_means, function(mu) {
-        (res$ratios - mu)^2 / ratios.se^2
-      })
-    })
-    
-    # Assign clusters based on minimum distance
-    if (post_hoc == "mean") {
-      cluster <- apply(apply(simplify2array(distance_list), c(1, 2), mean), 1, which.min)
-    } else if (post_hoc == "mode") {
-      cluster <- apply(apply(simplify2array(distance_list), c(1, 3), which.min), 1, get.mode)
-    }
-    names(cluster) <- cluster_means[cluster]
-    theta_hat <- as.numeric(cluster_means[cluster])
-    table(theta_hat)
-    
-  } else {
-    # Assign clusters based on fusion
-    cluster_means <- sort(unique(best_fit$theta_hat))
-    cluster <- match(best_fit$theta_hat[order(best_fit$ord)], cluster_means)
-    names(cluster) <- cluster_means[cluster]
-    theta_hat <- as.numeric(cluster_means[cluster])
-    table(theta_hat)
-  }
+  # Fit model
+  res_em <- laplace_mix_mr(ratios, ratios.se, tau = tau, null_cluster = null_cluster)
+  table(res_em$results$cluster_median)
   
   # Find cluster with the most number of SNPs
-  main_cluster <- table(cluster) |> which.max() |> names() |> as.numeric()
-  snps <- which(cluster == main_cluster)
-  
-  # Fit median estimator on main cluster
-  nclust <- length(unique(cluster))
-  theta_main <- fit_median(D, snps)
+  nclust <- length(unique(res_em$results$cluster))
+  main_cluster <- names(which.max(table(res_em$results$cluster)))
+  snps <- filter(res_em$results, cluster == main_cluster) %>%
+    mutate(rows = substr(SNP, 4, 6)) %>%
+    pull(rows) %>%
+    as.numeric()
   
   return(
     cbind(
-      theta_main,
+      theta_median(D, snps),
       nclust = nclust,
-      adj.rand = adjustedRandIndex(theta_hat, D$theta_T),
-      rand = rand.index(theta_hat, D$theta_T)
+      qhat = 1 - length(snps) / D$p,
+      adj.rand = adjustedRandIndex(res_em$results$cluster_median, D$eta + D$theta),
+      rand = rand.index(res_em$results$cluster_median, D$eta + D$theta)
     )
   )
+
+}
+
+# Weighted quantile function
+weighted_quantile <- function(x, w, prob = 0.5) {
   
+  # sort
+  o <- order(x)
+  x <- x[o]; w <- w[o]
+  
+  # cumulative weight
+  cw <- cumsum(w) - 0.5 * w
+  cw <- cw / sum(w)
+  
+  # find indices where cw < prob
+  idx <- which(cw < prob)
+  
+  if (length(idx) == 0) return(first(x))         # prob is smaller than all cw
+  if (length(idx) == length(x)) return(last(x)) # prob is larger than all cw
+  
+  k <- max(idx)
+  
+  # linear interpolation
+  ratio <- (prob - cw[k]) / (cw[k + 1] - cw[k])
+  x[k] + (x[k + 1] - x[k]) * ratio
+}
+
+# Update tau using quadratic formula
+update_tau <- function(ratios, r, mu, b_i, eps = 1e-12) {
+  
+  # Compute weighted average of distances for each cluster
+  n <- length(ratios)
+  K <- ncol(r)
+  c <- sum(r * sapply(1:K, function(k) (ratios - mu[k]) / b_i)) / n
+  if (abs(c) < eps) return(0.5)
+  
+  # Find the roots of the quadratic equation
+  roots <- ( c + 2 + c(-1, 1) * sqrt(c^2 + 4)) / (2 * c)
+  roots <- roots[is.finite(roots)]
+  valid <- roots[roots > 0 & roots < 1]
+  
+  if (length(valid) >= 1) {
+    # if two valid (unlikely), take the one closest to 0.5
+    return(valid[which.min(abs(valid - 0.5))])
+  } else {
+    # numeric fallback
+    return(0.5)
+  }
+}
+
+# EM for Laplace mixture with heteroscedastic scales
+laplace_mix_em <- function(ratios, ratios.se, tau, K, max_iter, tol, null_cluster) {
+  
+  # ---- Initialization ----
+  n <- length(ratios)
+  if (is.null(tau)) {
+    tau <- 0.5
+    is.null.tau <- TRUE
+  } else {
+    is.null.tau <- FALSE
+  }
+  b_i <- ratios.se * sqrt( tau * ( 1 - tau ) / ( 1 - 2 * tau + 2 * tau^2 ) )
+  
+  # Initial cluster assignments
+  cluster <- cluster::pam(ratios, k = K, diss = FALSE, metric = "manhattan", cluster.only=TRUE)
+  mu <- numeric(K); tmp_mu <- numeric(K)
+  for (k in 1:K) {
+    xk <- ratios[cluster == k]
+    mu[k] <- weighted_quantile(xk, rep(1, length(xk)), prob = 0.5)
+  }
+  
+  # Initial mixture proportions
+  pi <- table(cluster) / n
+  
+  # check-loss function
+  rho_tau <- function(u) u * (tau - (u < 0))
+  
+  # Determine which cluster should be null
+  if (null_cluster) {
+    null_idx <- which.min(abs(mu))  # Closest to zero
+    mu[null_idx] <- 0
+  }
+  
+  # ---- EM algorithm ----
+  loglik_prev <- -Inf
+  for (iter in 1:max_iter) {
+    
+    # ---- E-step ----
+    r <- matrix(0, n, K)
+    for (k in 1:K) {
+      u <- (ratios - mu[k]) / b_i
+      dens <- tau * (1 - tau) / b_i * exp(-rho_tau(u))
+      r[, k] <- pi[k] * dens
+    }
+    
+    # normalize rows
+    r <- r / rowSums(r)
+    
+    # ---- M-step ----
+    # Update mixture proportions
+    pi <- colMeans(r)
+    
+    # Update tau and b_i's if tau is not fixed
+    if (is.null.tau){
+      tau <- update_tau(ratios, r, mu, b_i)
+      b_i <- ratios.se * sqrt( tau * ( 1 - tau ) / ( 1 - 2 * tau + 2 * tau^2 ) )
+    }
+    
+    # Update cluster centers
+    for (k in 1:K) {
+      w <- r[, k] / b_i
+      tmp_mu[k] <- weighted_quantile(ratios, w, tau)
+      if (null_cluster && k == null_idx) {
+        next  # Skip updating the null cluster
+      }
+      mu[k] <- tmp_mu[k]
+    }
+    
+    # ---- Log-likelihood ----
+    loglik <- sum(log(rowSums(sapply(1:K, function(k) {
+      u <- (ratios - mu[k]) / b_i
+      pi[k] * tau * (1 - tau) / b_i * exp(-rho_tau(u))
+    }))))
+    
+    # Check convergence
+    if (abs(loglik - loglik_prev) < tol) break
+    loglik_prev <- loglik
+  }
+  
+  if (iter == max_iter) {
+    warning(paste("EM algorithm did not converge within the maximum number of iterations for K =", K))
+  }
+  
+  
+  # ---- Output ----
+  list(
+    mu = tmp_mu,
+    tau = tau,
+    pi = pi,
+    r = r,
+    b_i = b_i,
+    probability = apply(r, 1, max),
+    loglik = loglik,
+    iterations = iter,
+    cluster = apply(r, 1, which.max)
+  )
+}
+
+# Fit EM for a range of K = 1 to p and select best K using BIC
+laplace_mix_mr <- function(ratios, ratios.se, k = NULL, tau = NULL, n = NULL, gamma = 0, max_iter = 5000, tol = 1e-5, 
+                           snps = paste0("SNP", 1:length(ratios)), stop_bic_iter = 5, min_clust_search = 10, null_cluster = FALSE) {
+  
+  p <- length(ratios)
+  K.max <- p - 1
+  if (is.null(n)) { n <- p }
+  
+  # If user provides a fixed number of clusters
+  if (!is.null(k)) {
+    fit <- laplace_mix_em(ratios, ratios.se, tau, k, max_iter, tol, null_cluster)
+    df <- 2 * k - 1
+    bic <- -2 * fit$loglik + df * log(n) + 2 * gamma * p * log(k)
+    
+    return(list(
+      results = data.frame(
+        SNP = snps,
+        cluster = fit$cluster,
+        pi_hat = fit$pi,
+        probability = fit$probability,
+        cluster_quantile = fit$mu[fit$cluster],
+        theta = ratios,
+        theta_se = ratios.se
+      ),
+      tau = fit$tau,
+      pi = fit$pi,
+      mu = fit$mu,
+      r = fit$r,
+      b_i = fit$b_i,
+      K = k,
+      bic = bic
+    ))
+  }
+  
+  # Else search for best K using BIC
+  best_bic <- Inf
+  best_fit <- NULL
+  bic <- numeric(K.max)  # store BIC for each K
+  
+  for (K in 1:K.max) {
+    fit <- laplace_mix_em(ratios, ratios.se, tau, K, max_iter, tol, null_cluster)
+    
+    # Calculate BIC
+    df <- 2 * K - 1  # mixture proportions + cluster centers
+    bic[K] <- -2 * fit$loglik + df * log(n) + 2 * gamma * p * log(K)
+    
+    if (bic[K] < best_bic) {
+      best_bic <- bic[K]
+      best_fit <- fit
+      best_fit$K <- K
+      best_fit$bic <- bic[K]
+    }
+    
+    # ---- Early stopping rule ----
+    if (K >= min_clust_search) {
+      last_vals <- bic[(K - stop_bic_iter + 1):K]
+      prev_vals <- bic[(K - stop_bic_iter):(K - 1)]
+      
+      # if BIC has increased monotonically in the last stop_bic_iter steps
+      if (all(last_vals > prev_vals)) {
+        message("Early stopping at K = ", K, 
+                " (BIC worsened for ", stop_bic_iter, " consecutive steps).")
+        break
+      }
+    }
+  }
+  
+  return(list(
+    results = data.frame(
+      SNP = snps,
+      cluster = best_fit$cluster,
+      pi_hat = round(best_fit$pi[best_fit$cluster], 3),
+      probability = round(best_fit$probability, 3),
+      cluster_median = round(best_fit$mu[best_fit$cluster], 3),
+      theta = ratios,
+      theta_se = ratios.se
+    ),
+    tau = best_fit$tau,
+    pi = best_fit$pi,
+    mu = best_fit$mu,
+    r = best_fit$r,
+    b_i = best_fit$b_i
+  ))
 }

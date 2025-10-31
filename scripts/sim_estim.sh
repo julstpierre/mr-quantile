@@ -15,7 +15,7 @@ scenario_id=$((SLURM_ARRAY_TASK_ID / 5))    # 40 jobs / 8 scenarios = 5 chunks p
 chunk_index=$((SLURM_ARRAY_TASK_ID % 5))   # 0-based chunk index
 
 SCENARIO=${SCENARIOS[$scenario_id]}
-CHUNK_SIZE=200
+CHUNK_SIZE=80
 
 START_CHUNK=$((chunk_index * CHUNK_SIZE + 1))
 END_CHUNK=$((START_CHUNK + CHUNK_SIZE - 1))
