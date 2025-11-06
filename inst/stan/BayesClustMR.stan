@@ -8,19 +8,22 @@ data {
 parameters {
   simplex[K] pi;                  // mixing proportions
   ordered[K] mu;                  // component locations (ordered for identifiability)
+  vector<lower=0>[N] lambda;      // one latent variance per observation
 }
 
 model {
-  vector[K] log_pi = log(pi);  // cache log calculation
-  
+  vector[K] log_pi = log(pi);
+
   // Priors
   mu ~ normal(0, 2);
-  
-  // Likelihood with observation-specific scale parameters
+  for (n in 1:N)
+      lambda[n] ~ exponential(1 / (2 * square(b[n])));
+
+  // Hierarchical likelihood
   for (n in 1:N) {
     vector[K] lps = log_pi;
     for (k in 1:K) {
-      lps[k] += double_exponential_lpdf(theta[n] | mu[k], b[n]);
+      lps[k] += normal_lpdf(theta[n] | mu[k], sqrt(lambda[n]));
     }
     target += log_sum_exp(lps);
   }

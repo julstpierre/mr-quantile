@@ -54,7 +54,7 @@ sim_dat <- function(args){
   if (q == 0 ){
     etavals <- rep(0, 4)
   } else {
-    etavals <- 0.6
+    etavals <- 0.4
   }
   
   etavals <- etavals * c(0, -1, 1, 2)
@@ -352,7 +352,7 @@ fit_mrclust <- function(D){
                          )
     
     res_em_best <- res_em$results$best
-    table(res_em_best$cluster_mean)
+    table(res_em_best$cluster_class, res_em_best$cluster_mean)
     
     # Find cluster with the most number of SNPs
     nclust <- length(unique(res_em_best$cluster))
@@ -386,89 +386,18 @@ fit_mrclust <- function(D){
       )
 }
 
-fit_mvmrclust <- function(D){
-  fit <- lm(D$beta_hat_y ~ D$beta_hat_m, weights = D$sigma2_y^-1)
-  resid.y <- residuals(fit)
-  resid.se <- sqrt(D$sigma2_y * (1 - hatvalues(fit)))
-  ratios <- as.vector(resid.y / D$beta_hat_x)
-  ratios.se <- resid.se / abs(D$beta_hat_x)
-  res_em <- mr_clust_em(theta = ratios, 
-                        theta_se = ratios.se, 
-                        bx = D$beta_hat_x, 
-                        by = resid.y, 
-                        bxse = sqrt(D$sigma2_x), 
-                        byse = resid.se,
-                        obs_names = paste0("SNP", 1:D$p)
-  )
-  
-  res_em_best <- res_em$results$best
-  table(res_em_best$cluster_mean)
-  
-  # Find cluster with the most number of SNPs
-  main_cluster <- names(which.max(table(res_em_best$cluster_mean)))
-  snps <- filter(res_em_best, cluster_mean == main_cluster) %>%
-    mutate(rows = substr(observation, 4, 6)) %>%
-    pull(rows) %>%
-    as.numeric()
-  
-  # Fit median estimator on main cluster
-  nclust <- length(unique(res_em_best$cluster))
-  theta_main <- fit_median(D, snps)
-  
-  return(
-    cbind(
-      theta_main,
-      nclust = nclust,
-      adj.rand = adjustedRandIndex(res_em_best$cluster, D$theta_T),
-      rand = rand.index(res_em_best$cluster, D$theta_T)
-    )
-  )
-}
-
-#--------------------------------------------------------------------------------
-# Fit Bayesian Laplace mixture on simulated data
-#--------------------------------------------------------------------------------
-fit_mrlaplace_bayes <- function(D){
-  
-  # Fit model
-  res_em <- mr_laplace(D$beta_hat_y, D$beta_hat_x, sigma2_y = D$sigma2_y)
-  table(res_em$results$cluster_median)
-  
-  # Find cluster with the most number of SNPs
-  nclust <- length(unique(res_em$results$cluster))
-  main_cluster <- names(which.max(table(res_em$results$cluster)))
-  snps <- filter(res_em$results, cluster == main_cluster) %>%
-    mutate(rows = substr(SNP, 4, 6)) %>%
-    pull(rows) %>%
-    as.numeric()
-  
-  return(
-    cbind(
-      Estimate = first(filter(res_em$results, cluster == main_cluster))$cluster_median,
-      StdError = first(filter(res_em$results, cluster == main_cluster))$cluster_se,
-      LCL = first(filter(res_em$results, cluster == main_cluster))$cluster_lcl,
-      UCL = first(filter(res_em$results, cluster == main_cluster))$cluster_ucl,
-      nclust = nclust,
-      qhat = 1 - length(snps) / D$p,
-      adj.rand = adjustedRandIndex(res_em$results$cluster_median, D$eta + D$theta),
-      rand = rand.index(res_em$results$cluster_median, D$eta + D$theta)
-    )
-  )
-  
-}
-
 #--------------------------------------------------------------------------------
 # Fit Laplace mixture on simulated data
 #--------------------------------------------------------------------------------
-fit_mrlaplace <- function(D, tau = 0.5, null_cluster = FALSE){
+fit_mrlaplace <- function(D, dist = "laplace", k = NULL, null_cluster = FALSE, junk_cluster = TRUE){
   
   # Compute ratio estimates and their standard errors
   ratios <- D$beta_hat_y / D$beta_hat_x
   ratios.se <- sqrt(D$sigma2_y / D$beta_hat_x^2)
   
   # Fit model
-  res_em <- laplace_mix_mr(ratios, ratios.se, tau = tau, null_cluster = null_cluster)
-  table(res_em$results$cluster_median)
+  res_em <- laplace_mix_mr(dist, ratios, ratios.se, k = k, null_cluster = null_cluster, junk_cluster = junk_cluster)
+  table(res_em$results$cluster_class, res_em$results$cluster_median)
   
   # Find cluster with the most number of SNPs
   nclust <- length(unique(res_em$results$cluster))
@@ -478,8 +407,17 @@ fit_mrlaplace <- function(D, tau = 0.5, null_cluster = FALSE){
     pull(rows) %>%
     as.numeric()
   
+  # Fit weighted likelihood bootstrap
+  Estimate <- first(filter(res_em$results, cluster == main_cluster))$cluster_median
+  wlbs <- mr_laplace_boot(res_em, junk_cluster = junk_cluster)
+  boot_se <- unname(wlbs[as.numeric(main_cluster), "se_mu"])
+    
   return(
     cbind(
+      Estimate = Estimate,
+      StdError = boot_se,
+      LCL = Estimate - qnorm(0.975) * boot_se,
+      UCL = Estimate + qnorm(0.975) * boot_se,
       theta_median(D, snps),
       nclust = nclust,
       qhat = 1 - length(snps) / D$p,
@@ -515,16 +453,15 @@ weighted_quantile <- function(x, w, prob = 0.5) {
 }
 
 # Update tau using quadratic formula
-update_tau <- function(ratios, r, mu, b_i, eps = 1e-12) {
+update_tau <- function(ratios, r, mu, b, eps = 1e-12) {
   
-  # Compute weighted average of distances for each cluster
-  n <- length(ratios)
-  K <- ncol(r)
-  c <- sum(r * sapply(1:K, function(k) (ratios - mu[k]) / b_i)) / n
-  if (abs(c) < eps) return(0.5)
+  # Compute weighted average of distances
+  a <- sum(r * (ratios - mu) / b)
+  if (abs(a) < eps) return(0.5)
   
   # Find the roots of the quadratic equation
-  roots <- ( c + 2 + c(-1, 1) * sqrt(c^2 + 4)) / (2 * c)
+  neff <- sum(r)
+  roots <- ( a + 2 * neff + c(-1, 1) * sqrt(a^2 + 4 * neff^2)) / ( 2 * a )
   roots <- roots[is.finite(roots)]
   valid <- roots[roots > 0 & roots < 1]
   
@@ -537,32 +474,33 @@ update_tau <- function(ratios, r, mu, b_i, eps = 1e-12) {
   }
 }
 
-# EM for Laplace mixture with heteroscedastic scales
-laplace_mix_em <- function(ratios, ratios.se, tau, K, max_iter, tol, null_cluster) {
+# EM algorithm for mixture with heteroscedastic scales
+laplace_mix_em <- function(dist, ratios, ratios.se, K, max_iter, tol, null_cluster, junk_cluster) {
   
   # ---- Initialization ----
   n <- length(ratios)
-  if (is.null(tau)) {
-    tau <- 0.5
-    is.null.tau <- TRUE
-  } else {
-    is.null.tau <- FALSE
+  
+  if (dist == "laplace"){
+    b_i <- ratios.se / sqrt(2)  
+  } else if (dist == "gaussian"){
+    b_i <- ratios.se
   }
-  b_i <- ratios.se * sqrt( tau * ( 1 - tau ) / ( 1 - 2 * tau + 2 * tau^2 ) )
   
   # Initial cluster assignments
   cluster <- cluster::pam(ratios, k = K, diss = FALSE, metric = "manhattan", cluster.only=TRUE)
   mu <- numeric(K); tmp_mu <- numeric(K)
-  for (k in 1:K) {
-    xk <- ratios[cluster == k]
-    mu[k] <- weighted_quantile(xk, rep(1, length(xk)), prob = 0.5)
+  if (dist == "laplace"){
+    for (k in 1:K) {
+      mu[k] <- weighted_quantile(ratios[cluster == k], (b_i^-1)[cluster == k], prob = 0.5)
+    }
+  } else if (dist == "gaussian"){
+    for (k in 1:K) {
+      mu[k] <- sum((ratios.se^-2 * ratios) [cluster == k]) / sum((ratios.se^-2)[cluster == k])
+    }
   }
   
   # Initial mixture proportions
   pi <- table(cluster) / n
-  
-  # check-loss function
-  rho_tau <- function(u) u * (tau - (u < 0))
   
   # Determine which cluster should be null
   if (null_cluster) {
@@ -570,46 +508,78 @@ laplace_mix_em <- function(ratios, ratios.se, tau, K, max_iter, tol, null_cluste
     mu[null_idx] <- 0
   }
   
+  # Junk cluster
+  if (junk_cluster){
+    mu[K+1] <- median(ratios)
+    b_junk <- diff(range(ratios)) + 2 * max(ratios.se)
+    pi_junk <- runif(1, 0.05, 0.4)
+    pi <- c( pi * ( 1 - pi_junk ), pi_junk )
+  }
+  
   # ---- EM algorithm ----
   loglik_prev <- -Inf
   for (iter in 1:max_iter) {
     
     # ---- E-step ----
-    r <- matrix(0, n, K)
+    log_r <- matrix(NA, n, K + junk_cluster)
     for (k in 1:K) {
-      u <- (ratios - mu[k]) / b_i
-      dens <- tau * (1 - tau) / b_i * exp(-rho_tau(u))
-      r[, k] <- pi[k] * dens
+      if (dist == "laplace") {
+        log_dens <- -log(2 * b_i) - abs(ratios - mu[k]) / b_i
+      } else if (dist == "gaussian") {
+        log_dens <- dnorm(ratios, mean = mu[k], sd = b_i, log = TRUE)
+      }
+      log_r[, k] <- log(pi[k]) + log_dens
+    }
+    
+    if (junk_cluster){
+      log_junk_dens <- -log(2 * b_junk) - abs(ratios - mu[K+1]) / b_junk
+      log_r[, K + 1] <- log(pi[K + 1]) + log_junk_dens
     }
     
     # normalize rows
-    r <- r / rowSums(r)
+    log_row_sum <- apply(log_r, 1, logsumexp)
+    r <- exp(log_r - log_row_sum)
     
     # ---- M-step ----
     # Update mixture proportions
-    pi <- colMeans(r)
-    
-    # Update tau and b_i's if tau is not fixed
-    if (is.null.tau){
-      tau <- update_tau(ratios, r, mu, b_i)
-      b_i <- ratios.se * sqrt( tau * ( 1 - tau ) / ( 1 - 2 * tau + 2 * tau^2 ) )
-    }
+    pi <- pmax(colMeans(r), 1e-12)
     
     # Update cluster centers
     for (k in 1:K) {
-      w <- r[, k] / b_i
-      tmp_mu[k] <- weighted_quantile(ratios, w, tau)
+      if (dist == "laplace"){
+          w <- r[, k] / b_i
+          tmp_mu[k] <- weighted_quantile(ratios, w, 0.5)
+      } else if (dist == "gaussian"){
+          w <- r[, k] / (b_i^2)
+          tmp_mu[k] <- sum(w * ratios) / sum(w)
+      }
       if (null_cluster && k == null_idx) {
         next  # Skip updating the null cluster
       }
       mu[k] <- tmp_mu[k]
     }
     
+    if (junk_cluster){ 
+      tmp_mu[K+1] <- weighted_quantile(ratios, r[, K + 1] / b_junk, 0.5)
+      # mu[K+1] <- tmp_mu[K+1]
+      # b_junk <- sum( r[, K + 1] * abs( ratios - mu[K + 1] ) ) / sum( r[, K + 1] )
+    }
+  
     # ---- Log-likelihood ----
-    loglik <- sum(log(rowSums(sapply(1:K, function(k) {
-      u <- (ratios - mu[k]) / b_i
-      pi[k] * tau * (1 - tau) / b_i * exp(-rho_tau(u))
-    }))))
+    dens_mat <- sapply(1:K, function(k) {
+      if (dist == "laplace") {
+        pi[k] / ( 2 * b_i ) * exp( -abs( ratios - mu[k] ) / b_i )
+      } else if (dist == "gaussian") {
+        pi[k] * dnorm(ratios, mean = mu[k], sd = b_i)
+      }
+    })
+    
+    if (junk_cluster) {
+      junk_dens <- pi[K+1] / ( 2 * b_junk ) * exp( -abs( ratios - mu[K+1] ) / b_junk)
+      dens_mat <- cbind(dens_mat, junk_dens)
+    }
+    
+    loglik <- sum(matrixStats::rowLogSumExps(log(dens_mat)))
     
     # Check convergence
     if (abs(loglik - loglik_prev) < tol) break
@@ -620,52 +590,55 @@ laplace_mix_em <- function(ratios, ratios.se, tau, K, max_iter, tol, null_cluste
     warning(paste("EM algorithm did not converge within the maximum number of iterations for K =", K))
   }
   
-  
   # ---- Output ----
+  cluster_class <- apply(r, 1, which.max)
+  if (null_cluster) cluster_class[cluster_class == null_idx] <- "Null"
+  if (junk_cluster) cluster_class[cluster_class == (K + 1)] <- "Junk"
+    
   list(
     mu = tmp_mu,
-    tau = tau,
     pi = pi,
     r = r,
     b_i = b_i,
     probability = apply(r, 1, max),
     loglik = loglik,
     iterations = iter,
-    cluster = apply(r, 1, which.max)
+    cluster = apply(r, 1, which.max),
+    cluster_class = as.character(cluster_class)
   )
 }
 
 # Fit EM for a range of K = 1 to p and select best K using BIC
-laplace_mix_mr <- function(ratios, ratios.se, k = NULL, tau = NULL, n = NULL, gamma = 0, max_iter = 5000, tol = 1e-5, 
-                           snps = paste0("SNP", 1:length(ratios)), stop_bic_iter = 5, min_clust_search = 10, null_cluster = FALSE) {
+laplace_mix_mr <- function(dist, ratios, ratios.se, k = NULL, max_iter = 5000, tol = 1e-5, 
+                           snps = paste0("SNP", 1:length(ratios)), stop_bic_iter = 5, min_clust_search = 10, 
+                           null_cluster = FALSE, junk_cluster = FALSE) {
   
   p <- length(ratios)
   K.max <- p - 1
-  if (is.null(n)) { n <- p }
   
   # If user provides a fixed number of clusters
   if (!is.null(k)) {
-    fit <- laplace_mix_em(ratios, ratios.se, tau, k, max_iter, tol, null_cluster)
-    df <- 2 * k - 1
-    bic <- -2 * fit$loglik + df * log(n) + 2 * gamma * p * log(k)
+    fit <- laplace_mix_em(dist, ratios, ratios.se, k, max_iter, tol, null_cluster, junk_cluster)
+    df <- ( length(fit$pi) - 1 ) + ( k - null_cluster ) # ( mixture proportions - 1 ) + cluster centers
+    bic <- -2 * fit$loglik + df * log(p)
     
     return(list(
       results = data.frame(
         SNP = snps,
         cluster = fit$cluster,
-        pi_hat = fit$pi,
-        probability = fit$probability,
-        cluster_quantile = fit$mu[fit$cluster],
+        pi_hat = round(fit$pi[fit$cluster], 3),
+        probability = round(fit$probability, 3),
+        cluster_median = round(fit$mu[fit$cluster], 3),
         theta = ratios,
-        theta_se = ratios.se
+        theta_se = ratios.se,
+        cluster_class = fit$cluster_class
       ),
-      tau = fit$tau,
       pi = fit$pi,
       mu = fit$mu,
       r = fit$r,
       b_i = fit$b_i,
-      K = k,
-      bic = bic
+      bic = fit$bic,
+      dist = dist
     ))
   }
   
@@ -675,11 +648,11 @@ laplace_mix_mr <- function(ratios, ratios.se, k = NULL, tau = NULL, n = NULL, ga
   bic <- numeric(K.max)  # store BIC for each K
   
   for (K in 1:K.max) {
-    fit <- laplace_mix_em(ratios, ratios.se, tau, K, max_iter, tol, null_cluster)
+    fit <- laplace_mix_em(dist, ratios, ratios.se, K, max_iter, tol, null_cluster, junk_cluster)
     
     # Calculate BIC
-    df <- 2 * K - 1  # mixture proportions + cluster centers
-    bic[K] <- -2 * fit$loglik + df * log(n) + 2 * gamma * p * log(K)
+    df <- ( length(fit$pi) - 1 ) + ( K - null_cluster )  # ( mixture proportions - 1 ) + cluster centers
+    bic[K] <- -2 * fit$loglik + df * log(p)
     
     if (bic[K] < best_bic) {
       best_bic <- bic[K]
@@ -710,12 +683,116 @@ laplace_mix_mr <- function(ratios, ratios.se, k = NULL, tau = NULL, n = NULL, ga
       probability = round(best_fit$probability, 3),
       cluster_median = round(best_fit$mu[best_fit$cluster], 3),
       theta = ratios,
-      theta_se = ratios.se
+      theta_se = ratios.se,
+      cluster_class = best_fit$cluster_class
     ),
-    tau = best_fit$tau,
     pi = best_fit$pi,
     mu = best_fit$mu,
     r = best_fit$r,
-    b_i = best_fit$b_i
+    b_i = best_fit$b_i,
+    bic = best_fit$bic,
+    dist = dist
   ))
+}
+
+mr_laplace_boot <- function(fit, nboot = 1000, alpha = 1, max_iter=5000, tol = 1e-5, junk_cluster = FALSE){
+  
+  # Initialize parameters from initial fit
+  dist <- fit$dist
+  ratios <- fit$results$theta
+  ratios.se <- fit$results$theta_se
+  r <- fit$r
+  n <- nrow(r)
+  K <- ncol(r)
+  b_i <- fit$b_i
+  mu <- numeric(K)
+  b_junk <- diff(range(ratios)) + 2 * max(ratios.se)
+  
+  # Weighted likelihood bootstrap
+  boot_samples <- replicate(nboot, {
+      w <- rgamma(n, shape = alpha); w <- w / mean(w)
+      
+      # ---- EM algorithm ----
+      loglik_prev <- -Inf
+      for (iter in 1:max_iter) {
+        
+        # ---- M-step ----
+        # Update mixture proportions
+        pi <- pmax(colSums(w * r) / sum(w), 1e-12)
+        
+        # Update cluster centers
+        for (k in 1:( K - junk_cluster )) {
+          if (dist == "laplace"){
+              weights <- w * r[, k] / b_i
+              mu[k] <- weighted_quantile(ratios, weights, 0.5)
+          } else if (dist == "gaussian"){
+              weights <- w * r[, k] / (b_i^2)
+              mu[k] <- sum(weights * ratios) / sum(weights)
+          }
+        }
+        
+        # Update location and scale parameters for the junk cluster
+        if (junk_cluster){ 
+          mu[K] <- weighted_quantile(ratios, rep(1, length(ratios)), 0.5)
+         # b_junk <- sum( r[, K] * abs( ratios - mu[K] ) ) / sum( r[,] )
+        }
+        
+        # ---- E-step ----
+        log_r <- matrix(NA, n, K)
+        for (k in 1:( K - junk_cluster )) {
+          if (dist == "laplace") {
+            log_dens <- -log(2 * b_i) - abs(ratios - mu[k]) / b_i
+          } else if (dist == "gaussian") {
+            log_dens <- dnorm(ratios, mean = mu[k], sd = b_i, log = TRUE)
+          }
+          log_r[, k] <- log(pi[k]) + log_dens
+        }
+        
+        if (junk_cluster){
+          log_junk_dens <- -log(2 * b_junk) - abs(ratios - mu[K]) / b_junk
+          log_r[, K] <- log(pi[K]) + log_junk_dens
+        }
+        
+        # normalize rows
+        log_row_sum <- apply(log_r, 1, logsumexp)
+        r <- exp(log_r - log_row_sum)
+        
+        # ---- Log-likelihood ----
+        dens_mat <- sapply(1:( K - junk_cluster ), function(k) {
+          if (dist == "laplace") {
+            pi[k] / ( 2 * b_i ) * exp( -abs( ratios - mu[k] ) / b_i )
+          } else if (dist == "gaussian") {
+            pi[k] * dnorm(ratios, mean = mu[k], sd = b_i)
+          }
+        })
+        
+        if (junk_cluster) {
+          junk_dens <- pi[K] / ( 2 * b_junk ) * exp( -abs( ratios - mu[K] ) / b_junk)
+          dens_mat <- cbind(dens_mat, junk_dens)
+        }
+        
+        loglik <- sum(matrixStats::rowLogSumExps(log(dens_mat)))
+        
+        # Check convergence
+        if (abs(loglik - loglik_prev) < tol) break
+        loglik_prev <- loglik
+      }
+      
+      if (iter == max_iter) {
+        warning(paste("EM algorithm did not converge within the maximum number of iterations for K =", K))
+      }
+      
+      # ---- Return parameters ----
+      list(mu = mu, pi = pi)
+      
+  }, simplify = FALSE)
+  
+  se_mu <- do.call(rbind, lapply(boot_samples, `[[`, "mu")) %>% apply(2, sd)
+  se_pi <- do.call(rbind, lapply(boot_samples, `[[`, "pi")) %>% apply(2, sd)
+  
+  return(cbind("se_mu" = se_mu,
+               "se_pi" = se_pi
+               )
+         )
+  
 }

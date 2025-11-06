@@ -57,7 +57,8 @@ mr_laplace <- function(beta_hat_y, beta_hat_x, sigma2_y,
     
     # Initial values
     init_list <- list(list(mu = sort(mu), 
-                           pi = table(match(cluster, order(mu))) / length(ratios)
+                           pi = table(match(cluster, order(mu))) / length(ratios),
+                           lambda = ratios.se
                            )
                       ) %>% replicate(4, .)
     
@@ -68,7 +69,7 @@ mr_laplace <- function(beta_hat_y, beta_hat_x, sigma2_y,
       seed = seed,
       chains = 4,
       parallel_chains = 4,
-      adapt_delta = 0.85,
+      adapt_delta = 0.9,
       refresh = 500 # print update every 500 iters
     )
     

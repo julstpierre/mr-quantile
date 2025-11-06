@@ -9,12 +9,12 @@ library(glmnet)
 library(genlasso)
 library(fossil)
 library(mclust)
-library(posterior)
+#library(posterior)
 
 # Load custom estimator functions
 source("utils.R")
 source("mrclust.R")
-source("mrlaplace.R")
+# source("mrlaplace.R")
 
 # -----------------------------
 # Parse command-line arguments
@@ -50,8 +50,7 @@ res_median      <- lapply(chunk, theta_median) %>% do.call(rbind.data.frame, .)
 res_egger      <- lapply(chunk, theta_egger) %>% do.call(rbind.data.frame, .)
 res_mrclust     <- lapply(chunk, fit_mrclust) %>% do.call(rbind.data.frame, .)
 res_mrlaplace <- lapply(chunk, fit_mrlaplace) %>% do.call(rbind.data.frame, .)
-res_mrlaplace_null <- lapply(chunk, fit_mrlaplace, null_cluster = TRUE) %>% do.call(rbind.data.frame, .)
-res_mrlaplace_bayes <- lapply(chunk, fit_mrlaplace_bayes) %>% do.call(rbind.data.frame, .)
+res_mrgaussian <- lapply(chunk, fit_mrlaplace, dist = "gaussian") %>% do.call(rbind.data.frame, .)
 
 # -----------------------------
 # Combine results into a single data frame and add a column for the model
@@ -81,8 +80,7 @@ res_all <- bind_rows(
   ,tag_method(res_egger, "egger")
   ,tag_method(res_mrclust, "mrclust")
   ,tag_method(res_mrlaplace, "mrlaplace")
-  ,tag_method(res_mrlaplace_null, "mrlaplace_null")
-  ,tag_method(res_mrlaplace_bayes, "mrlaplace_bayes")
+  ,tag_method(res_mrgaussian, "mrgaussian")
   )
 
 # -----------------------------
