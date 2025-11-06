@@ -1,4 +1,5 @@
 #!/bin/bash
+#SBATCH --account=def-mlegault
 #SBATCH --job-name=mr_all
 #SBATCH --array=0-39
 #SBATCH --time=03:00:00
