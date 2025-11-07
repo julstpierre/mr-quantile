@@ -389,7 +389,7 @@ fit_mrclust <- function(D){
 #--------------------------------------------------------------------------------
 # Fit Laplace mixture on simulated data
 #--------------------------------------------------------------------------------
-fit_mrlaplace <- function(D, dist = "laplace", k = NULL, null_cluster = FALSE, junk_cluster = FALSE){
+fit_mrlaplace <- function(D, dist = "laplace", k = NULL, null_cluster = FALSE, junk_cluster = TRUE){
   
   # Compute ratio estimates and their standard errors
   ratios <- D$beta_hat_y / D$beta_hat_x
