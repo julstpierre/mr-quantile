@@ -389,7 +389,7 @@ fit_mrclust <- function(D){
 #--------------------------------------------------------------------------------
 # Fit Laplace mixture on simulated data
 #--------------------------------------------------------------------------------
-fit_mrlaplace <- function(D, dist = "laplace", k = NULL, null_cluster = FALSE, junk_cluster = TRUE){
+fit_mrlaplace <- function(D, dist = "laplace", k = NULL, null_cluster = FALSE, junk_cluster = FALSE){
   
   # Compute ratio estimates and their standard errors
   ratios <- D$beta_hat_y / D$beta_hat_x
@@ -481,7 +481,7 @@ laplace_mix_em <- function(dist, ratios, ratios.se, K, max_iter, tol, null_clust
   n <- length(ratios)
   
   if (dist == "laplace"){
-    b_i <- sqrt(2) * ratios.se  
+    b_i <- ratios.se / sqrt(2)
   } else if (dist == "gaussian"){
     b_i <- ratios.se
   }
@@ -499,8 +499,9 @@ laplace_mix_em <- function(dist, ratios, ratios.se, K, max_iter, tol, null_clust
     }
   }
   
-  # Initial mixture proportions
+  # Initial mixture proportions and overdispersion parameter
   pi <- table(cluster) / n
+  phi <- 1
   
   # Determine which cluster should be null
   if (null_cluster) {
@@ -524,9 +525,9 @@ laplace_mix_em <- function(dist, ratios, ratios.se, K, max_iter, tol, null_clust
     log_r <- matrix(NA, n, K + junk_cluster)
     for (k in 1:K) {
       if (dist == "laplace") {
-        log_dens <- -log(2 * b_i) - abs(ratios - mu[k]) / b_i
+        log_dens <- -log(2 * sqrt(phi) * b_i) - abs(ratios - mu[k]) / ( sqrt(phi) * b_i )
       } else if (dist == "gaussian") {
-        log_dens <- dnorm(ratios, mean = mu[k], sd = b_i, log = TRUE)
+        log_dens <- dnorm(ratios, mean = mu[k], sd = sqrt(phi) * b_i, log = TRUE)
       }
       log_r[, k] <- log(pi[k]) + log_dens
     }
@@ -564,13 +565,23 @@ laplace_mix_em <- function(dist, ratios, ratios.se, K, max_iter, tol, null_clust
       # mu[K+1] <- tmp_mu[K+1]
       # b_junk <- sum( r[, K + 1] * abs( ratios - mu[K + 1] ) ) / sum( r[, K + 1] )
     }
+    
+    # Update overdispersion parameter
+    n_eff <- sum( r[ , 1:K] )
+    if (dist == "gaussian") {
+      num <- sum( ( r * ( outer(ratios, mu, "-" )^2 ) / b_i^2 ) [,1:K] )
+      phi <- max( 1, num / n_eff )
+    } else if (dist == "laplace") {
+      num <- sum( ( r * abs( outer( ratios, mu, "-" ) ) / b_i ) [,1:K] )
+      phi <- max( 1, ( num / n_eff )^2 )
+    }
   
     # ---- Log-likelihood ----
     dens_mat <- sapply(1:K, function(k) {
       if (dist == "laplace") {
-        pi[k] / ( 2 * b_i ) * exp( -abs( ratios - mu[k] ) / b_i )
+        pi[k] / ( 2 * sqrt(phi) * b_i ) * exp( -abs( ratios - mu[k] ) / ( sqrt(phi) * b_i ) )
       } else if (dist == "gaussian") {
-        pi[k] * dnorm(ratios, mean = mu[k], sd = b_i)
+        pi[k] * dnorm(ratios, mean = mu[k], sd = sqrt(phi) * b_i)
       }
     })
     
@@ -598,6 +609,7 @@ laplace_mix_em <- function(dist, ratios, ratios.se, K, max_iter, tol, null_clust
   list(
     mu = tmp_mu,
     pi = pi,
+    phi = phi,
     r = r,
     b_i = b_i,
     probability = apply(r, 1, max),
@@ -634,6 +646,7 @@ laplace_mix_mr <- function(dist, ratios, ratios.se, k = NULL, max_iter = 5000, t
         cluster_class = fit$cluster_class
       ),
       pi = fit$pi,
+      phi = fit$phi,
       mu = fit$mu,
       r = fit$r,
       b_i = fit$b_i,
@@ -687,6 +700,7 @@ laplace_mix_mr <- function(dist, ratios, ratios.se, k = NULL, max_iter = 5000, t
       cluster_class = best_fit$cluster_class
     ),
     pi = best_fit$pi,
+    phi = best_fit$phi,
     mu = best_fit$mu,
     r = best_fit$r,
     b_i = best_fit$b_i,
@@ -737,13 +751,23 @@ mr_laplace_boot <- function(fit, nboot = 1000, alpha = 1, max_iter=5000, tol = 1
          # b_junk <- sum( r[, K] * abs( ratios - mu[K] ) ) / sum( r[,] )
         }
         
+        # Update overdispersion parameter
+        n_eff <- sum( r[ , 1:(K - junk_cluster)] )
+        if (dist == "gaussian") {
+          num <- sum( ( r * ( outer(ratios, mu, "-" )^2 ) / b_i^2 ) [,1:(K - junk_cluster)] )
+          phi <- max( 1, num / n_eff )
+        } else if (dist == "laplace") {
+          num <- sum( ( r * abs( outer( ratios, mu, "-" ) ) / b_i ) [,1:(K - junk_cluster)] )
+          phi <- max( 1, ( num / n_eff )^2 )
+        }
+        
         # ---- E-step ----
         log_r <- matrix(NA, n, K)
         for (k in 1:( K - junk_cluster )) {
           if (dist == "laplace") {
-            log_dens <- -log(2 * b_i) - abs(ratios - mu[k]) / b_i
+            log_dens <- -log(2 * sqrt(phi) * b_i) - abs(ratios - mu[k]) / ( sqrt(phi) * b_i )
           } else if (dist == "gaussian") {
-            log_dens <- dnorm(ratios, mean = mu[k], sd = b_i, log = TRUE)
+            log_dens <- dnorm(ratios, mean = mu[k], sd = sqrt(phi) * b_i, log = TRUE)
           }
           log_r[, k] <- log(pi[k]) + log_dens
         }
@@ -760,9 +784,9 @@ mr_laplace_boot <- function(fit, nboot = 1000, alpha = 1, max_iter=5000, tol = 1
         # ---- Log-likelihood ----
         dens_mat <- sapply(1:( K - junk_cluster ), function(k) {
           if (dist == "laplace") {
-            pi[k] / ( 2 * b_i ) * exp( -abs( ratios - mu[k] ) / b_i )
+            pi[k] / ( 2 * sqrt(phi) * b_i ) * exp( -abs( ratios - mu[k] ) / ( sqrt(phi) * b_i ) )
           } else if (dist == "gaussian") {
-            pi[k] * dnorm(ratios, mean = mu[k], sd = b_i)
+            pi[k] * dnorm(ratios, mean = mu[k], sd = sqrt(phi) * b_i)
           }
         })
         
