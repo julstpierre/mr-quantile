@@ -49,7 +49,7 @@ res_ivw         <- lapply(chunk, theta_ivw) %>% do.call(rbind.data.frame, .)
 res_median      <- lapply(chunk, theta_median) %>% do.call(rbind.data.frame, .)
 res_egger      <- lapply(chunk, theta_egger) %>% do.call(rbind.data.frame, .)
 res_mrclust     <- lapply(chunk, fit_mrclust) %>% do.call(rbind.data.frame, .)
-res_mrlaplace <- lapply(chunk, fit_mrlaplace) %>% do.call(rbind.data.frame, .)
+res_mrlaplace <- lapply(chunk, fit_mrlaplace, junk_cluster = FALSE) %>% do.call(rbind.data.frame, .)
 res_mrgaussian <- lapply(chunk, fit_mrlaplace, dist = "gaussian") %>% do.call(rbind.data.frame, .)
 
 # -----------------------------
