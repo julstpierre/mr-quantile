@@ -481,7 +481,7 @@ laplace_mix_em <- function(dist, ratios, ratios.se, K, max_iter, tol, null_clust
   n <- length(ratios)
   
   if (dist == "laplace"){
-    b_i <- ratios.se / sqrt(2)  
+    b_i <- sqrt(2) * ratios.se  
   } else if (dist == "gaussian"){
     b_i <- ratios.se
   }
