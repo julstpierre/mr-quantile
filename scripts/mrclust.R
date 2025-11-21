@@ -461,9 +461,9 @@ mr_clust_em <- function (theta, theta_se, bx, by, bxse, byse, obs_names = NULL,
                                                                                        "best"), cluster_membership = list(by_prob = 0.1, bound = 0), 
                          plot_results = list("best", min_pr = 0.5), trait_search = FALSE, 
                          trait_pvalue = 1e-05, proxy_r2 = 0.8, catalogue = "GWAS", 
-                         proxies = "None", build = 37) 
+                         proxies = "None", build = 37, cluster_sizes = 0:length(theta)) 
 {
-  cluster_sizes <- NULL
+
   init_clust_means <- NULL
   init_clust_probs <- NULL
   junk_mixture <- TRUE
@@ -483,7 +483,7 @@ mr_clust_em <- function (theta, theta_se, bx, by, bxse, byse, obs_names = NULL,
   rand_num <- 5
   rand_sample <- seq(0.05, 0.4, by = 0.05)
   m <- length(theta)
-  cluster_sizes <- 0:m
+
   if (is.null(obs_names)) {
     obs_names <- paste0("snp_", 1:m)
   }

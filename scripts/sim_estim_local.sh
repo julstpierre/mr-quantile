@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # List of scenarios
-SCENARIOS=("D_S1" "D_S2" "D_S3" "D_S4" "D_S5" "D_S6" "D_S7" "D_S8")
+SCENARIOS=($(seq -f "D_S%g" 1 56))
 
-CHUNK_SIZE=80
+CHUNK_SIZE=400
 
 # Navigate to the scripts folder
 cd ~/Dropbox/Postdoc/Projects/MRFuse/scripts

@@ -23,14 +23,14 @@ if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 # Scenario metadata
 # -----------------------------
 scenario_metadata <- expand.grid(
-  p = 100000,
-  theta = c(0, 0.2),
-  n = 50000,
-  h2_x = 0.25,
-  h2_y = 0.25,
-  m = 100,
-  q = c(0, 0.2, 0.4, 0.6)
-) %>% mutate(scenario = paste0("S", 1:8))
+  p = 50, 
+  n = 25000, 
+  theta = c(-0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2), 
+  h2_x = 0.5, 
+  h2_y = c(0.1, 0.2, 0.4, 0.6), 
+  h2_u = c(0, 0.1), 
+  q = 0.6
+) %>% mutate(scenario = paste0("S", row_number()))
 
 # -----------------------------
 # Load and process all results
@@ -66,63 +66,96 @@ all_results <- map_dfr(all_files, read_and_expand) %>%
 # Summary statistics
 # -----------------------------
 summary_stats <- all_results %>%
-  # group_by(scenario, method, ebic) %>%
-  group_by(scenario, method) %>%
+  group_by(theta, h2_y, h2_u, method) %>%
   summarise(
     theta = mean(theta),
-    q = mean(q),
     mean = mean(Estimate, na.rm = TRUE),
     bias = mean(Estimate - theta, na.rm = TRUE),
     sd = sd(Estimate, na.rm = TRUE),
     coverage = mean(theta >= LCL & theta <= UCL, na.rm = TRUE),
     power = mean(LCL > 0 | UCL < 0, na.rm = TRUE),
     ci_width = mean(UCL - LCL, na.rm = TRUE),
-    nclust = mean(nclust, na.rm = TRUE),
-    qhat = mean(qhat, na.rm = TRUE),
-    rand = mean(rand, na.rm = TRUE),
     n = n(),
     .groups = "drop"
   )
 
-filter(summary_stats, scenario == "S1") %>%
-    print(width = Inf)
+filter(summary_stats, h2_u == "0" & h2_y == "0.1") %>%
+    print(width = Inf, n = Inf)
 
-filter(summary_stats, scenario == "S2") %>%
-  print(width = Inf)
+filter(summary_stats, h2_u == "0" & h2_y == "0.2") %>%
+  print(width = Inf, n = Inf)
 
-filter(summary_stats, scenario == "S3") %>%
-  print(width = Inf)
+filter(summary_stats, h2_u == "0" & h2_y == "0.4") %>%
+  print(width = Inf, n = Inf)
 
-filter(summary_stats, scenario == "S4") %>%
-  print(width = Inf)
+filter(summary_stats, h2_u == "0" & h2_y == "0.6") %>%
+  print(width = Inf, n = Inf)
 
-filter(summary_stats, scenario == "S5") %>%
-  print(width = Inf)
+filter(summary_stats, h2_u == "0.1" & h2_y == "0.1") %>%
+  print(width = Inf, n = Inf)
 
-filter(summary_stats, scenario == "S6") %>%
-  print(width = Inf)
+filter(summary_stats, h2_u == "0.1" & h2_y == "0.2") %>%
+  print(width = Inf, n = Inf)
 
-filter(summary_stats, scenario == "S7") %>%
-  print(width = Inf)
+filter(summary_stats, h2_u == "0.1" & h2_y == "0.4") %>%
+  print(width = Inf, n = Inf)
 
-filter(summary_stats, scenario == "S8") %>%
-  print(width = Inf)
+filter(summary_stats, h2_u == "0.1" & h2_y == "0.6") %>%
+  print(width = Inf, n = Inf)
 
 # -----------------------------
 # Plots
 # -----------------------------
 
-## 1. Boxplot of theta_hat by method
-ggplot(all_results, aes(x = method, y = theta_hat, fill = method)) +
-  geom_boxplot(outlier.alpha = 0.2) +
-  geom_hline(aes(yintercept = theta_true), color = "red", linetype = "dashed") +
-  facet_wrap(~ scenario, scales = "free_y") +
+## 1. Plot Type-I error and Power
+plot_power <- function(data, h2_u_val = "0", n = 25000) {
+  
+  ggplot(filter(data, h2_u == h2_u_val), aes(x = theta, y = power, fill = method)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    geom_hline(aes(yintercept = 0.05), linetype = "dashed", color = "red") +
+    facet_grid(
+      h2_y ~ theta,
+      labeller = labeller(
+        h2_y = function(x) paste0("h²ᵧ = ", x),
+        theta = function(x) paste0("θ = ", x)
+      )
+    ) +
+    theme_minimal(base_size = 13) +
+    labs(
+      title = bquote("Type-I error and Power, n = " * .(n) * ", " * h[u]^2 == .(h2_u_val)),
+      y = "Percentage significant",
+      x = "Method"
+    ) +
+    theme(
+      axis.text.x = element_blank(),
+      legend.position = "bottom",
+      legend.title = element_blank()
+    )
+}
+
+plot_power(summary_stats, h2_u_val = "0", n = 25000)
+plot_power(summary_stats, h2_u_val = "0.1", n = 25000)
+
+ggplot(filter(summary_stats, h2_u == "0.1"), aes(x = theta, y = power, fill = method)) +
+  geom_bar(stat="identity", position = "dodge") +
+  geom_hline(aes(yintercept = 0.05), linetype = "dashed", color = "red") +
+  facet_grid(h2_y ~ theta,
+             labeller = labeller(
+               h2_y = function(x) {
+                 paste0("h²ᵧ = ", x)
+               },   # or custom function / named vector
+               theta = function(x) {
+                 paste0("θ = ", x)
+               }
+             )) +
   theme_minimal(base_size = 13) +
-  labs(title = expression(hat(theta)~"distribution across methods"),
-       y = expression(hat(theta)),
+  labs(title = bquote("Type-I error and Power, n = 25000, " * h[u]^2 == 0.1),
+       y = "Percentage significant",
        x = "Method") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  # ggsave(file.path(plot_dir, "boxplot_theta_hat_all_methods.png"), width = 12, height = 6)
+  theme(axis.text.x = element_blank(),
+        legend.position = "bottom",
+        legend.title = element_blank())
+# ggsave(file.path(plot_dir, "boxplot_theta_hat_all_methods.png"), width = 12, height = 6)
 
 ## 2. Bias and RMSE
 summary_long <- summary_stats %>%

@@ -2,19 +2,16 @@
 
 # Load required packages
 library(dplyr)
+library(TwoSampleMR)
 library(MendelianRandomization)
 library(quantreg)
-library(glmnet)
-# library(mrclust)
-library(genlasso)
 library(fossil)
 library(mclust)
-#library(posterior)
+library(MRcML)
 
 # Load custom estimator functions
 source("utils.R")
-source("mrclust.R")
-# source("mrlaplace.R")
+# source("mrclust.R")
 
 # -----------------------------
 # Parse command-line arguments
@@ -32,7 +29,7 @@ end_idx       <- as.numeric(args[3])  # e.g., 200
 # -----------------------------
 # Load simulation data
 # -----------------------------
-for (f in paste0("D_S", 1:8, ".RData")) {
+for (f in list.files("../data/simulations/", pattern = "^D_S[0-9]+\\.RData$")) {
   load(paste0("../data/simulations/", f))
   rm(f)
 }
@@ -45,12 +42,20 @@ chunk <- D[start_idx:end_idx]
 # -----------------------------
 # Run all MR methods
 # -----------------------------
-res_ivw         <- lapply(chunk, theta_ivw) %>% do.call(rbind.data.frame, .)
-res_median      <- lapply(chunk, theta_median) %>% do.call(rbind.data.frame, .)
-res_egger      <- lapply(chunk, theta_egger) %>% do.call(rbind.data.frame, .)
-res_mrclust     <- lapply(chunk, fit_mrclust) %>% do.call(rbind.data.frame, .)
-res_mrlaplace <- lapply(chunk, fit_mrlaplace) %>% do.call(rbind.data.frame, .)
-res_mrgaussian <- lapply(chunk, fit_mrlaplace, dist = "gaussian") %>% do.call(rbind.data.frame, .)
+res_mr_ivw        <- lapply(chunk, fit_mr_ivw) %>% do.call(rbind.data.frame, .)
+res_mr_ivw_oracle <- lapply(chunk, fit_mr_ivw, snps = 31:50) %>% do.call(rbind.data.frame, .)
+res_mr_median     <- lapply(chunk, fit_mr_median) %>% do.call(rbind.data.frame, .)
+res_mr_egger      <- lapply(chunk, fit_mr_egger) %>% do.call(rbind.data.frame, .)
+res_mr_mode       <- lapply(chunk, fit_mr_mode) %>% do.call(rbind.data.frame, .)
+res_mr_raps       <- lapply(chunk, fit_mr_raps) %>% do.call(rbind.data.frame, .)
+res_mr_lasso      <- lapply(chunk, fit_mr_lasso) %>% do.call(rbind.data.frame, .)
+res_mr_contmix    <- lapply(chunk, fit_mr_contmix) %>% do.call(rbind.data.frame, .)
+res_mr_mix        <- lapply(chunk, fit_mr_mix) %>% do.call(rbind.data.frame, .)
+res_mr_quantreg   <- lapply(chunk, fit_mr_quantreg_ratios, bootstrap = "wlbs") %>% do.call(rbind.data.frame, .)
+res_mr_cML        <- lapply(chunk, fit_mr_cML) %>% do.call(rbind.data.frame, .)
+res_mr_cML_DP     <- lapply(chunk, fit_mr_cML_DP) %>% do.call(rbind.data.frame, .)
+#res_mr_clust     <- lapply(chunk, fit_mr_clust) %>% do.call(rbind.data.frame, .)
+#res_mr_laplace   <- lapply(chunk, fit_mr_laplace) %>% do.call(rbind.data.frame, .)
 
 # -----------------------------
 # Combine results into a single data frame and add a column for the model
@@ -75,12 +80,20 @@ tag_method <- function(res_list, method) {
 }
 
 res_all <- bind_rows(
-  tag_method(res_ivw, "ivw")
-  ,tag_method(res_median, "median")
-  ,tag_method(res_egger, "egger")
-  ,tag_method(res_mrclust, "mrclust")
-  ,tag_method(res_mrlaplace, "mrlaplace")
-  ,tag_method(res_mrgaussian, "mrgaussian")
+  tag_method(res_mr_ivw, "mr_ivw")
+  ,tag_method(res_mr_ivw_oracle, "mr_ivw_oracle")
+  ,tag_method(res_mr_median, "mr_median")
+  ,tag_method(res_mr_egger, "mr_egger")
+  ,tag_method(res_mr_mode, "mr_mode")
+  ,tag_method(res_mr_raps, "mr_raps")
+  ,tag_method(res_mr_lasso, "mr_lasso")
+  ,tag_method(res_mr_contmix, "mr_contmix")
+  ,tag_method(res_mr_mix, "mr_mix")
+  ,tag_method(res_mr_quantreg, "mr_quantreg")
+  ,tag_method(res_mr_cML, "mr_cML")
+  ,tag_method(res_mr_cML_DP, "mr_cML_DP")
+  # ,tag_method(res_mr_clust, "mr_clust")
+  # ,tag_method(res_mr_laplace, "mr_laplace")
   )
 
 # -----------------------------
