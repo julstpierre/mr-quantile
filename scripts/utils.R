@@ -287,15 +287,23 @@ fit_mr_raps <- function(D, snps = 1:D$p){
 #---------------------------------------------
 # Fit MR_Lasso on simulated data
 #---------------------------------------------
-fit_mr_lasso <- function(D){
-  res_mr_lasso <- mr_lasso(mr_input(bx = D$beta_hat_x, bxse = sqrt(D$sigma2_x), 
-                                    by = D$beta_hat_y, byse = sqrt(D$sigma2_y)))
-  tibble(
-    Estimate = res_mr_lasso$Estimate,
-    StdError = res_mr_lasso$StdError
-  ) %>% mutate(
-    LCL = res_mr_lasso$CILower,
-    UCL = res_mr_lasso$CIUpper
+fit_mr_lasso <- function(D) {
+  tryCatch(
+    {
+      res_mr_lasso <- mr_lasso(mr_input(bx = D$beta_hat_x, bxse = sqrt(D$sigma2_x), 
+                                       by = D$beta_hat_y, byse = sqrt(D$sigma2_y)))
+      tibble(
+        Estimate = res_mr_lasso$Estimate,
+        StdError = res_mr_lasso$StdError
+      ) %>% mutate(
+        LCL = res_mr_lasso$CILower,
+        UCL = res_mr_lasso$CIUpper
+      )
+    },
+    error = function(e) {
+      warning(paste("Failed:", e$message))
+      return(NULL)
+    }
   )
 }
 
