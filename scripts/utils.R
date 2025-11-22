@@ -238,7 +238,7 @@ fit_mr_quantreg <- function(D, bootstrap = "resampling", verbose = FALSE, tau = 
     as_tibble()
 }
 
-fit_mr_quantreg_ratios <- function(D, bootstrap = "resampling", verbose = FALSE, tau = NULL){
+fit_mr_quantreg_ratios <- function(D, bootstrap = "wlbs", verbose = FALSE, tau = NULL){
   mr_quantreg_ratios(D$beta_hat_y, D$beta_hat_x, D$sigma2_y, D$sigma2_x, 
               bootstrap = bootstrap, verbose = verbose, tau_init = tau)$coefficients %>%
     as_tibble()
@@ -348,14 +348,21 @@ fit_mr_presso <- function(D, dist = "lm"){
 fit_mr_contmix <- function(D){
   res_mr_contmix <- mr_conmix(mr_input(bx = D$beta_hat_x, bxse = sqrt(D$sigma2_x), 
                                       by = D$beta_hat_y, byse = sqrt(D$sigma2_y)))
-  
-  tibble(
-    Estimate = res_mr_contmix$Estimate,
-    StdError = NA
-  ) %>% mutate(
-    LCL = res_mr_contmix$CILower,
-    UCL = res_mr_contmix$CIUpper,
-  )
+    
+    # Check for valid confidence intervals
+    valid_ci <- which(
+        res_mr_contmix$Estimate > res_mr_contmix$CILower & 
+        res_mr_contmix$Estimate < res_mr_contmix$CIUpper
+    )
+    
+    # Output results
+    tibble(
+      Estimate = res_mr_contmix$Estimate,
+      StdError = NA
+    ) %>% mutate(
+      LCL = res_mr_contmix$CILower[valid_ci],
+      UCL = res_mr_contmix$CIUpper[valid_ci],
+    )
 }
 
 #---------------------------------------------
@@ -1010,7 +1017,7 @@ mr_quantreg_ratios <- function(beta_hat_y,
                               weights = rep(1, length(beta_hat_y)),
                               tol = 1e-5,
                               max_iter = 500,
-                              bootstrap = "resampling",
+                              bootstrap = "wlbs",
                               nboot = 200,
                               verbose = FALSE) {
   

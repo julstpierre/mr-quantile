@@ -3,7 +3,7 @@
 #SBATCH --job-name=mr_all
 #SBATCH --array=0-279
 #SBATCH --time=10:00:00
-#SBATCH --mem=1G
+#SBATCH --mem=4G
 #SBATCH --cpus-per-task=1
 #SBATCH --output=../results/logs/%x_%A_%a.out
 
