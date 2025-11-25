@@ -2,7 +2,7 @@ grep -rl "DUE TO TIME LIMIT" --include="*.out" . \
   | while read f; do head -n 1 "$f"; done \
   | awk -F'[ ,]+' '
     /Running/ {
-      scenario=$2; start=$4; end=$6; size=10;
+      scenario=$2; start=$4; end=$6; size=2;
       for (s=start; s<=end; s+=size) {
         e=s+size-1; if (e>end) e=end;
         print scenario, s, e;

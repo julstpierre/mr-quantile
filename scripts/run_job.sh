@@ -4,7 +4,7 @@
 #SBATCH --time=10:00:00
 #SBATCH --mem=2G
 #SBATCH --cpus-per-task=1
-#SBATCH --output=~/projects/def-mlegault/gf591137/MRFuse/results/logs/%x_%j.out
+#SBATCH --output=/home/projects/def-mlegault/gf591137/MRFuse/results/logs/%x_%j.out
 
 cd ~/projects/def-mlegault/gf591137/MRFuse/scripts/
 module load r
