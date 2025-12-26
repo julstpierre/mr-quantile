@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # List of scenarios
-SCENARIOS=($(seq -f "D_S%g" 1 56))
+SCENARIOS=($(seq -f "D_S%g" 1 168))
 
 CHUNK_SIZE=400
 

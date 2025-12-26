@@ -29,8 +29,8 @@ end_idx       <- as.numeric(args[3])  # e.g., 200
 # -----------------------------
 # Load simulation data
 # -----------------------------
-for (f in list.files("../data/simulations/", pattern = "^D_S[0-9]+\\.RData$")) {
-  load(paste0("../data/simulations/", f))
+for (f in list.files("../data/simulations/main/", pattern = "^D_S[0-9]+\\.RData$")) {
+  load(paste0("../data/simulations/main/", f))
   rm(f)
 }
 D <- get(scenario_name)                # Extract the dataset corresponding to scenario_name
@@ -51,11 +51,11 @@ res_mr_raps       <- lapply(chunk, fit_mr_raps) %>% do.call(rbind.data.frame, .)
 res_mr_lasso      <- lapply(chunk, fit_mr_lasso) %>% do.call(rbind.data.frame, .)
 res_mr_contmix    <- lapply(chunk, fit_mr_contmix) %>% do.call(rbind.data.frame, .)
 res_mr_mix        <- lapply(chunk, fit_mr_mix) %>% do.call(rbind.data.frame, .)
-res_mr_quantreg   <- lapply(chunk, fit_mr_quantreg_ratios) %>% do.call(rbind.data.frame, .)
+res_mr_quantreg_wlbs   <- lapply(chunk, fit_mr_quantreg, se = "wlbs") %>% do.call(rbind.data.frame, .)
+res_mr_quantreg_boot   <- lapply(chunk, fit_mr_quantreg, se = "boot") %>% do.call(rbind.data.frame, .)
+res_mr_quantreg_norm   <- lapply(chunk, fit_mr_quantreg, se = NULL) %>% do.call(rbind.data.frame, .)
 res_mr_cML        <- lapply(chunk, fit_mr_cML) %>% do.call(rbind.data.frame, .)
-res_mr_cML_DP     <- lapply(chunk, fit_mr_cML_DP) %>% do.call(rbind.data.frame, .)
-#res_mr_clust     <- lapply(chunk, fit_mr_clust) %>% do.call(rbind.data.frame, .)
-#res_mr_laplace   <- lapply(chunk, fit_mr_laplace) %>% do.call(rbind.data.frame, .)
+# res_mr_cML_DP     <- lapply(chunk, fit_mr_cML_DP) %>% do.call(rbind.data.frame, .)
 
 # -----------------------------
 # Combine results into a single data frame and add a column for the model
@@ -80,7 +80,7 @@ tag_method <- function(res_list, method) {
 }
 
 res_all <- bind_rows(
-  tag_method(res_mr_ivw, "mr_ivw")
+   tag_method(res_mr_ivw, "mr_ivw")
   ,tag_method(res_mr_ivw_oracle, "mr_ivw_oracle")
   ,tag_method(res_mr_median, "mr_median")
   ,tag_method(res_mr_egger, "mr_egger")
@@ -89,17 +89,17 @@ res_all <- bind_rows(
   ,tag_method(res_mr_lasso, "mr_lasso")
   ,tag_method(res_mr_contmix, "mr_contmix")
   ,tag_method(res_mr_mix, "mr_mix")
-  ,tag_method(res_mr_quantreg, "mr_quantreg")
+  ,tag_method(res_mr_quantreg_wlbs, "mr_quantreg_wlbs")
+  ,tag_method(res_mr_quantreg_boot, "mr_quantreg_boot")
+  ,tag_method(res_mr_quantreg_norm, "mr_quantreg_norm")
   ,tag_method(res_mr_cML, "mr_cML")
-  ,tag_method(res_mr_cML_DP, "mr_cML_DP")
-  # ,tag_method(res_mr_clust, "mr_clust")
-  # ,tag_method(res_mr_laplace, "mr_laplace")
+  #,tag_method(res_mr_cML_DP, "mr_cML_DP")
   )
 
 # -----------------------------
 # Save results
 # -----------------------------
-out_dir <- "../results/rds"
+out_dir <- "../results/rds/main"
 out_file <- paste0(scenario_name, "_chunk_", start_idx, "_to_", end_idx, ".rds")
 out_path <- file.path(out_dir, out_file)
 saveRDS(res_all, out_path)

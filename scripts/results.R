@@ -46,21 +46,7 @@ read_and_expand <- function(path) {
 all_results <- map_dfr(all_files, read_and_expand) %>%
   mutate(scenario = str_extract(source_file, "S\\d+(_null)?")) %>%
   left_join(scenario_metadata, by = "scenario") %>%
-  select(-source_file) %>%
-  mutate(
-    ebic = if_else(
-      str_detect(method, "^res_fused_lasso_"),
-      str_replace(method, "^res_fused_lasso_", "") %>%
-        str_replace("^0(\\d)$", "0.\\1") %>%   # turn 05 into 0.5, 01 into 0.1, etc.
-        as.numeric(),
-      NA_real_
-    ),
-    method = if_else(
-      str_detect(method, "^res_fused_lasso_"),
-      "res_fused_lasso",
-      method
-    )
-  )
+  select(-source_file)
 
 # -----------------------------
 # Summary statistics
@@ -71,13 +57,15 @@ summary_stats <- all_results %>%
     theta = mean(theta),
     mean = mean(Estimate, na.rm = TRUE),
     bias = mean(Estimate - theta, na.rm = TRUE),
+    rmse = sqrt(mean((Estimate - theta)^2, na.rm = TRUE)),
     sd = sd(Estimate, na.rm = TRUE),
     coverage = mean(theta >= LCL & theta <= UCL, na.rm = TRUE),
     power = mean(LCL > 0 | UCL < 0, na.rm = TRUE),
     ci_width = mean(UCL - LCL, na.rm = TRUE),
     n = n(),
     .groups = "drop"
-  )
+  ) %>%
+  filter(!(method %in% c("mr_quantreg", "mr_quantreg_boot")))
 
 filter(summary_stats, h2_u == "0" & h2_y == "0.1") %>%
     print(width = Inf, n = Inf)
@@ -106,13 +94,66 @@ filter(summary_stats, h2_u == "0.1" & h2_y == "0.6") %>%
 # -----------------------------
 # Plots
 # -----------------------------
+tol12 <- c(
+  "#1F78B4", "grey", "black", "#E31A1C", "#FF7F00",
+  "#6A3D9A", "#A6CEE3", "#B2DF8A", "#FB9A99",
+  "#FDBF6F",  "#33A02C", "#81A02C","#B15928"
+)
 
-## 1. Plot Type-I error and Power
-plot_power <- function(data, h2_u_val = "0", n = 25000) {
+names(tol12) <- unique(summary_stats$method)
+
+## 1. Plot Type-I error
+plot_typeI_error <- function(data, 
+                       theta_val = c(-0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2), 
+                       n = 25000) {
   
-  ggplot(filter(data, h2_u == h2_u_val), aes(x = theta, y = power, fill = method)) +
+  ggplot(filter(data, theta %in% theta_val), aes(x = theta, y = power, fill = method)) +
     geom_bar(stat = "identity", position = "dodge") +
     geom_hline(aes(yintercept = 0.05), linetype = "dashed", color = "red") +
+    scale_fill_manual(values = tol12) +
+    geom_text(
+      aes(label = round(power, 2)),
+      position = position_dodge(width = 0.9),
+      vjust = -0.3, size = 2.5
+    ) +
+    facet_grid(
+      h2_u ~ h2_y,
+      labeller = labeller(
+        h2_y = function(x) paste0("h²ᵧ = ", x),
+        h2_u = function(x) paste0("h²ᵤ = ", x)
+      )
+    ) +
+    theme_minimal(base_size = 13) +
+    labs(
+  title = bquote("Type-I error, n = " * .(n) * ", \u03B8 = " * .(theta_val)),
+  y = "Percentage significant",
+  x = "Method"
+) +
+    theme(
+      axis.text.x = element_blank(),
+      legend.position = "bottom",
+      legend.title = element_blank()
+    )
+}
+
+plot_typeI_error(summary_stats, theta_val = 0, n = 25000)
+
+## 2. Plot Power
+plot_power <- function(data, 
+                       h2_u_val, 
+                       theta_val = c(-0.2, -0.1, -0.05, 0.05, 0.1, 0.2), 
+                       n = 25000,
+                       methods) {
+  
+  ggplot(filter(data, h2_u == h2_u_val, theta %in% theta_val, method %in% methods), aes(x = theta, y = power, fill = method)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    scale_fill_manual(values = tol12) +
+    geom_text(
+      aes(label = round(power, 2)),
+      position = position_dodge(width = 0.9),
+      vjust = -0.3, size = 2.5
+    ) +
+    coord_cartesian(ylim = c(0, 1.1)) +
     facet_grid(
       h2_y ~ theta,
       labeller = labeller(
@@ -122,7 +163,7 @@ plot_power <- function(data, h2_u_val = "0", n = 25000) {
     ) +
     theme_minimal(base_size = 13) +
     labs(
-      title = bquote("Type-I error and Power, n = " * .(n) * ", " * h[u]^2 == .(h2_u_val)),
+      title = bquote("Power, n = " * .(n) * ", " * h[u]^2 == .(h2_u_val)),
       y = "Percentage significant",
       x = "Method"
     ) +
@@ -133,42 +174,125 @@ plot_power <- function(data, h2_u_val = "0", n = 25000) {
     )
 }
 
-plot_power(summary_stats, h2_u_val = "0", n = 25000)
-plot_power(summary_stats, h2_u_val = "0.1", n = 25000)
+plot_power(summary_stats, h2_u_val = 0, n = 25000, methods = c("mr_cML_DP", "mr_egger", "mr_ivw", "mr_ivw_oracle", "mr_quantreg_norm", "mr_quantreg_wlbs", "mr_raps"))
+plot_power(summary_stats, h2_u_val = 0.1, n = 25000, methods = c("mr_cML_DP", "mr_ivw_oracle", "mr_quantreg_wlbs", "mr_quantreg_norm"))
 
-ggplot(filter(summary_stats, h2_u == "0.1"), aes(x = theta, y = power, fill = method)) +
-  geom_bar(stat="identity", position = "dodge") +
-  geom_hline(aes(yintercept = 0.05), linetype = "dashed", color = "red") +
-  facet_grid(h2_y ~ theta,
-             labeller = labeller(
-               h2_y = function(x) {
-                 paste0("h²ᵧ = ", x)
-               },   # or custom function / named vector
-               theta = function(x) {
-                 paste0("θ = ", x)
-               }
-             )) +
-  theme_minimal(base_size = 13) +
-  labs(title = bquote("Type-I error and Power, n = 25000, " * h[u]^2 == 0.1),
-       y = "Percentage significant",
-       x = "Method") +
-  theme(axis.text.x = element_blank(),
-        legend.position = "bottom",
-        legend.title = element_blank())
-# ggsave(file.path(plot_dir, "boxplot_theta_hat_all_methods.png"), width = 12, height = 6)
+## 3. Plot Coverage
+plot_coverage <- function(data, 
+                         h2_u_val, 
+                         theta_val = c(-0.2, -0.1, -0.05, 0.05, 0.1, 0.2), 
+                         n = 25000,
+                         methods) {
+  
+  ggplot(filter(data, h2_u == h2_u_val, theta %in% theta_val, method %in% methods), aes(x = theta, y = coverage, fill = method)) +
+    geom_bar(stat = "identity", position = "dodge", width = 1.5) +
+    coord_cartesian(ylim = c(0.85, 1)) + 
+    # geom_hline(aes(yintercept = 0.95), linetype = "dashed", color = "red") +
+    scale_fill_manual(values = tol12) +
+    geom_text(
+      aes(label = round(coverage, 2)),
+      position = position_dodge(width = 1.5),
+      vjust = -0.3, size = 2.5
+    ) +
+    facet_grid(
+      h2_y ~ theta,
+      labeller = labeller(
+        h2_y = function(x) paste0("h²ᵧ = ", x),
+        theta = function(x) paste0("θ = ", x)
+      )
+    ) +
+    theme_minimal(base_size = 13) +
+    labs(
+      title = bquote("Coverage, n = " * .(n) * ", " * h[u]^2 == .(h2_u_val)),
+      y = "Coverage percentage",
+      x = "Method"
+    ) +
+    theme(
+      axis.text.x = element_blank(),
+      legend.position = "bottom",
+      legend.title = element_blank()
+    )
+}
 
-## 2. Bias and RMSE
-summary_long <- summary_stats %>%
-  pivot_longer(cols = c(bias, rmse), names_to = "metric", values_to = "value")
+plot_coverage(summary_stats, h2_u_val = 0, n = 25000, methods = c("mr_cML_DP", "mr_egger", "mr_ivw", "mr_ivw_oracle", "mr_quantreg_norm", "mr_quantreg_wlbs", "mr_raps"))
+plot_coverage(summary_stats, h2_u_val = 0.1, n = 25000, methods = c("mr_cML_DP", "mr_ivw_oracle", "mr_quantreg_norm", "mr_quantreg_wlbs"))
 
-ggplot(filter(summary_long, scenario %in% c("S3", "S4")), aes(x = method, y = value, fill = method)) +
-  geom_col(position = "dodge") +
-  facet_grid(metric ~ scenario, scales = "free_y") +
-  theme_minimal(base_size = 13) +
-  labs(title = "Bias and RMSE per method",
-       x = "Method", y = "Value") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # +
-  # ggsave(file.path(plot_dir, "bias_rmse_all_methods.png"), width = 12, height = 6)
+## 4. Plot RMSE
+plot_rmse <- function(data, 
+                          h2_u_val, 
+                          theta_val = c(-0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2), 
+                          n = 25000,
+                          methods) {
+  
+  ggplot(filter(data, h2_u == h2_u_val, theta %in% theta_val, method %in% methods), aes(x = theta, y = rmse, fill = method)) +
+    geom_bar(stat = "identity", position = "dodge", width = 2.5) +
+    # coord_cartesian(ylim = c(0.85, 1)) + 
+    scale_fill_manual(values = tol12) +
+    geom_text(
+      aes(label = round(rmse, 3)),
+      position = position_dodge(width = 2.5),
+      vjust = -0.3, size = 2.25
+    ) +
+    facet_grid(
+      h2_y ~ theta,
+      labeller = labeller(
+        h2_y = function(x) paste0("h²ᵧ = ", x),
+        theta = function(x) paste0("θ = ", x)
+      )
+    ) +
+    theme_minimal(base_size = 13) +
+    labs(
+      title = bquote("RMSE, n = " * .(n) * ", " * h[u]^2 == .(h2_u_val)),
+      y = "RMSE",
+      x = "Method"
+    ) +
+    theme(
+      axis.text.x = element_blank(),
+      legend.position = "bottom",
+      legend.title = element_blank()
+    )
+}
+
+plot_rmse(summary_stats, h2_u_val = 0, n = 25000, methods = c("mr_cML_DP", "mr_egger", "mr_ivw", "mr_ivw_oracle", "mr_quantreg_wlbs", "mr_raps"))
+plot_rmse(summary_stats, h2_u_val = 0.1, n = 25000, methods = c("mr_cML_DP", "mr_ivw_oracle", "mr_quantreg_wlbs"))
+
+## 5. Plot bias
+plot_bias <- function(data, 
+                        h2_u_val, 
+                        theta_val = c(-0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2), 
+                        n = 25000,
+                        methods) {
+  
+  ggplot(filter(data, h2_u == h2_u_val, theta %in% theta_val, method %in% methods), aes(x = theta, y = bias, fill = method)) +
+    geom_bar(stat = "identity", position = "dodge", width = 2.5) +
+    # coord_cartesian(ylim = c(0.85, 1)) + 
+    scale_fill_manual(values = tol12) +
+    geom_text(
+      aes(label = round(bias, 3)),
+      position = position_dodge(width = 2.5),
+      vjust = -0.3, size = 2.25
+    ) +
+    facet_grid(
+      h2_y ~ theta,
+      labeller = labeller(
+        h2_y = function(x) paste0("h²ᵧ = ", x),
+        theta = function(x) paste0("θ = ", x)
+      )
+    ) +
+    theme_minimal(base_size = 13) +
+    labs(
+      title = bquote("Bias, n = " * .(n) * ", " * h[u]^2 == .(h2_u_val)),
+      y = "Bias",
+      x = "Method"
+    ) +
+    theme(
+      axis.text.x = element_blank(),
+      legend.position = "bottom",
+      legend.title = element_blank()
+    )
+}
+plot_bias(summary_stats, h2_u_val = 0, n = 25000, methods = c("mr_cML_DP", "mr_egger", "mr_ivw", "mr_ivw_oracle", "mr_quantreg", "mr_raps"))
+plot_bias(summary_stats, h2_u_val = 0.1, n = 25000, methods = c("mr_cML_DP", "mr_ivw_oracle", "mr_quantreg"))
 
 # -----------------------------
 # Done

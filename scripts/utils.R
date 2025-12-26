@@ -58,12 +58,11 @@ sim_indv_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(theta = 0, p = 100, n = 50000, q = 0.2, k = 4)
+  # args <- list(theta = 0, p = 50, n = 50000, q = 0.2)
   n <- args$n 
   theta <- args$theta
   p <- args$p
   q <- args$q
-  k <- args$k
   m <- q * p
   
   # Simulate genetic data, errors and invalid IVs
@@ -72,43 +71,21 @@ sim_indv_dat <- function(args){
   epsilon_u <- rnorm(2 * n)
   epsilon_x <- rnorm(2 * n)
   epsilon_y <- rnorm(2 * n)
-  invalid.ivs <- sample(1:p, m)
+  invalid.IVs <- sample(1:p, m)
   
   # Simulate confounders
-  phi <- matrix(0, nrow = p, ncol = k)
-  if (k == 1){
-    cluster <- rep(1, p)
-    phi[invalid.ivs] <- runif(m, -0.1, 0.1)
-  } else{
-    cluster <- sample(rep(1:4, times = c(40, 20, 20, 20)))
-    for (j in 2:k){
-      phi[cluster == j, j] <- 
-        runif(sum(cluster == j), 0.1, 0.2) * sample(c(-1, 1), 
-              size = sum(cluster == j), 
-              replace = TRUE
-        )
-    }
-  }
+  phi <- rep(0, p)
+  phi[invalid.IVs] <- runif(m, -0.1, 0.1)
   U <- G %*% phi + epsilon_u
-  # apply(G %*% phi, 2, var) / apply(U, 2, var)
   
   # Simulate exposure
   gamma <- runif(p, 0.1, 0.2) * sample(c(-1, 1), size = p, replace = TRUE)
-  gamma[cluster > 1] <- 0
-  beta_x_u <- rep(1, ncol(U))
-  X <- G %*% gamma + U %*% beta_x_u + epsilon_x
-  # apply(G %*% gamma, 2, var) / apply(X, 2, var)
+  X <- G %*% gamma + U + epsilon_x
   
   # Simulate outcome
   alpha <- rep(0, p)
-  alpha[invalid.ivs] <- runif(m, 0.2, 0.3)
-  beta_y_u <- c(1, -0.4, 0.4, 0.8)[1:k]
-  Y <- X %*% theta + G %*% alpha + U %*% beta_y_u + epsilon_y
-  
-  # Check cluster means
-  beta_x_i <- gamma + phi %*% beta_x_u
-  beta_y_i <- theta * beta_x_i + alpha + phi %*% beta_y_u
-  table(beta_y_i / beta_x_i, cluster)
+  alpha[invalid.IVs] <- runif(m, 0.2, 0.3)
+  Y <- X %*% theta + G %*% alpha + U + epsilon_y
   
   # Summary stats for X
   sampX <- seq(1, n)
@@ -126,14 +103,11 @@ sim_indv_dat <- function(args){
               "sigma2_x" = sigma2_x, 
               "beta_hat_y" = beta_hat_y, 
               "sigma2_y" = sigma2_y,
-              "cluster" = cluster,
               "theta" = theta,
-              "alpha" = alpha,
-              "mu" = theta + (k > 1) * phi %*% beta_y_u / (beta_x_i),
               "n" = n,
               "p" = p,
               "q" = q,
-              "invalid.ivs" = invalid.ivs
+              "invalid.IVs" = invalid.IVs
   )
   )
 }
@@ -232,20 +206,9 @@ fit_mr_cML_DP <- function(D){
 #---------------------------
 # Fit Quantile Regression
 #---------------------------
-fit_mr_quantreg <- function(D, bootstrap = "resampling", verbose = FALSE, tau = NULL){
+fit_mr_quantreg <- function(D, se = NULL, verbose = FALSE, tau = NULL, nboot = 200){
   mr_quantreg(D$beta_hat_y, D$beta_hat_x, D$sigma2_y, D$sigma2_x, 
-              bootstrap = bootstrap, verbose = verbose, tau_init = tau)$coefficients %>%
-    as_tibble()
-}
-
-fit_mr_quantreg_ratios <- function(D, bootstrap = "wlbs", verbose = FALSE, tau = NULL){
-  mr_quantreg_ratios(D$beta_hat_y, D$beta_hat_x, D$sigma2_y, D$sigma2_x, 
-              bootstrap = bootstrap, verbose = verbose, tau_init = tau)$coefficients %>%
-    as_tibble()
-}
-
-fit_mr_quantreg_MA <- function(D, bootstrap = "resampling", verbose = FALSE){
-  mr_quantreg_MA(D$beta_hat_y, D$beta_hat_x, D$sigma2_y, D$sigma2_x, bootstrap = bootstrap, verbose = verbose) %>%
+              se = se, verbose = verbose, tau_init = tau, nboot = nboot)$coefficients %>%
     as_tibble()
 }
 
@@ -876,138 +839,9 @@ mr_laplace_boot <- function(fit, nboot = 1000, alpha = 1, max_iter=5000, tol = 1
 }
 
 #---------------------------
-# Quantile regression
-#---------------------------
-mr_quantreg <- function(beta_hat_y,
-                        beta_hat_x,
-                        sigma2_y,
-                        sigma2_x,
-                        tau_init = NULL,
-                        theta_init = 0,
-                        lambda_init = 1,
-                        weights = rep(1, length(beta_hat_y)),
-                        tol = 1e-6,
-                        max_iter = 500,
-                        bootstrap = "resampling",
-                        nboot = 200,
-                        verbose = FALSE) {
-  
-  # Initialize parameters
-  n <- length(beta_hat_y)
-  tau <- ifelse(is.null(tau_init), runif(1, 0.1, 0.9), tau_init)
-  lambda <- lambda_init
-  w_i <- 1 / sqrt(sigma2_y)
-  lambda_i <- lambda * w_i
-  theta <- theta_init
-  loglik_prev <- -Inf
-  beta_x <- rep(0, length(beta_hat_x))
-  
-  # Greedy search for tau and lambda
-  for (iter in 1:max_iter) {
-    
-    # Update beta_x
-    cond1 <- beta_hat_y - theta * beta_hat_x - theta^2 * sigma2_x * lambda_i * tau
-    cond2 <- beta_hat_y - theta * beta_hat_x - theta^2 * sigma2_x * lambda_i * (tau - 1)
-    
-    for (i in 1:n) {
-      # Case 1: u_i > 0
-      if (cond1[i] > 0) {
-        beta_x[i] <- beta_hat_x[i] + sigma2_x[i] * lambda_i[i] * theta * tau
-        
-        # Case 3: u_i < 0
-      } else if (cond2[i] < 0) {
-        beta_x[i] <- beta_hat_x[i] + sigma2_x[i] * lambda_i[i] * theta * (tau - 1)
-        
-        # Case 2: u_i = 0 (within interval)
-      } else {
-        beta_x[i] <- beta_hat_y[i] / theta
-      }
-    }
-    
-    # Update tau
-    if (is.null(tau_init)){
-      a <- sum(weights * lambda_i * (beta_hat_y - theta * beta_x))
-      roots <- ( a + 2 * sum(weights) + c(-1, 1) * sqrt(a^2 + 4 * sum(weights)^2)) / ( 2 * a )
-      roots <- roots[is.finite(roots)]
-      valid <- roots[roots > 0 & roots < 1]
-      if (length(valid) >= 1) {
-        # if two valid (unlikely), take the one closest to 0.5
-        tau <- valid[which.min(abs(valid - 0.5))]
-        # tau <- max(min(tau, 0.90), 0.10)
-      } else {
-        tau <- 0.5
-      }
-    }
-    
-    # Update lambda
-    lambda <- sum(weights) / ( sum( weights * w_i * rho_tau( beta_hat_y - theta * beta_x, tau ) ) )
-    lambda_i <- lambda * w_i
-    
-    # Update theta
-    theta <- rq(beta_hat_y ~ beta_x - 1, weights = weights * lambda_i, tau = tau)$coef
-    
-    # Compute log-likelihood
-    loglik <- sum(weights) * (log(lambda) + log(tau * (1 - tau))) -
-      lambda * sum(weights * w_i * rho_tau(beta_hat_y - theta * beta_x, tau)) -
-      0.5 * sum( weights * (beta_hat_x - beta_x)^2 / sigma2_x )
-    
-    # Check convergence
-    if ( abs( loglik - loglik_prev ) < tol ) break
-    loglik_prev <- loglik
-  }
-  
-  if (iter == max_iter)
-    warning("Maximum iterations reached without convergence.")
-  
-  # Obtain standard error via resampling
-  if (is.null(bootstrap)){
-    se <- NA
-  } else if (bootstrap == "resampling"){
-      se <- (rq(beta_hat_y ~ beta_x - 1, weights = weights * lambda_i, tau = tau) %>% summary(se="boot", R = nboot) %>% coef())[, "Std. Error"]
-  } else if (bootstrap == "wlbs"){
-      se <- replicate(nboot, {
-          s <- rgamma(n, shape = 1); s <- s / mean(s)
-          mr_quantreg(beta_hat_y, beta_hat_x, sigma2_y, sigma2_x, tau_init = tau, weights = s, bootstrap = NULL)$coefficients$Estimate
-          }) %>% sd()
-  } else if (bootstrap == "DP"){
-      boot_vals <- replicate(nboot, {
-        beta_hat_y_boot <- rnorm(n, beta_hat_y, sqrt(sigma2_y))
-        beta_hat_x_boot <- rnorm(n, beta_hat_x, sqrt(sigma2_x))
-        mr_quantreg(beta_hat_y_boot, beta_hat_x_boot,
-                    sigma2_y, sigma2_x,
-                    bootstrap = NULL)$coefficients$Estimate
-      })
-      
-      theta <- mean(boot_vals)
-      se    <- sd(boot_vals)
-  }
-  
-  # Print results if verbose
-  if (verbose) {
-    cat("Converged after", iter, "iterations\n")
-    cat("Estimated tau:", tau, "\n")
-    cat("Estimated lambda:", lambda, "\n")
-  }
-  
-  # Return data frame
-  return(
-    list(
-      coefficients = data.frame(
-        "Estimate" = theta, 
-        "StdError" = se, 
-        "LCL" = theta - qnorm(0.975) * se,
-        "UCL" = theta + qnorm(0.975) * se
-      ),
-      bic = -2 * loglik + log(n) * (2 + is.null(tau_init)),
-      aic = -2 * loglik + 2 * (2 + is.null(tau_init))
-    )
-  )
-}
-
-#---------------------------
 # Quantile regression using ratios
 #---------------------------
-mr_quantreg_ratios <- function(beta_hat_y,
+mr_quantreg <- function(beta_hat_y,
                               beta_hat_x,
                               sigma2_y,
                               sigma2_x,
@@ -1017,7 +851,7 @@ mr_quantreg_ratios <- function(beta_hat_y,
                               weights = rep(1, length(beta_hat_y)),
                               tol = 1e-5,
                               max_iter = 500,
-                              bootstrap = "wlbs",
+                              se = NULL,
                               nboot = 200,
                               verbose = FALSE) {
   
@@ -1029,10 +863,11 @@ mr_quantreg_ratios <- function(beta_hat_y,
   
   # Initialize parameters
   w_i <- 1 / ratios.se
+  # w_i <- w_i * n / sum(w_i)  # normalize weights
   lambda <- lambda_init
   lambda_i <- lambda * w_i
   theta <- theta_init
-  tau <- ifelse(is.null(tau_init), runif(1, 0.1, 0.9), tau_init)
+  tau <- ifelse(is.null(tau_init), 0.5, tau_init)
   loglik_prev <- -Inf
   
   # Optimization loop
@@ -1041,26 +876,17 @@ mr_quantreg_ratios <- function(beta_hat_y,
     # Update tau
     if (is.null(tau_init)){
       a <- sum(weights * lambda_i * (ratios - theta))
-      roots <- ( a + 2 * sum(weights) + c(-1, 1) * sqrt(a^2 + 4 * sum(weights)^2)) / ( 2 * a )
-      roots <- roots[is.finite(roots)]
-      valid <- roots[roots > 0 & roots < 1]
-      if (length(valid) >= 1) {
-        # if two valid (unlikely), take the one closest to 0.5
-        tau <- valid[which.min(abs(valid - 0.5))]
-        # tau <- max(min(tau, 0.90), 0.10)
-      } else {
-        tau <- 0.5
-      }
+      tau <- ( a + 2 * sum(weights) - sqrt(a^2 + 4 * sum(weights)^2)) / ( 2 * a )
     }
+    
+    # Update theta
+    theta <- weighted_quantile(ratios, weights * w_i, tau )
     
     # Update lambda
     if (is.null(tau_init)){
       lambda <- sum(weights) / sum(weights * w_i * rho_tau(ratios - theta, tau))
       lambda_i <- lambda * w_i
     }
-    
-    # Update theta
-    theta <- weighted_quantile(ratios, weights * lambda_i, tau)
     
     # Log-likelihood
     loglik <- sum(weights) * (log(lambda) + log(tau * (1 - tau))) -
@@ -1075,36 +901,28 @@ mr_quantreg_ratios <- function(beta_hat_y,
     warning("Maximum iterations reached without convergence.")
   
   # Bootstrap SE
-  if (is.null(bootstrap)){
-    se <- NA
-  } else if (bootstrap == "resampling") {
-    se <- boot_vals <- replicate(nboot, {
-      beta_hat_y_boot <- rnorm(n, beta_hat_y, sqrt(sigma2_y))
-      beta_hat_x_boot <- rnorm(n, beta_hat_x, sqrt(sigma2_x))
-      mr_quantreg_ratios(beta_hat_y_boot, beta_hat_x_boot,
-                         sigma2_y, sigma2_x, 
-                         bootstrap = NULL)$coefficients$Estimate
-    }) |> sd()
-    
-  } else if (bootstrap == "DP") {
-    boot_vals <- replicate(nboot, {
-      beta_hat_y_boot <- rnorm(n, beta_hat_y, sqrt(sigma2_y))
-      beta_hat_x_boot <- rnorm(n, beta_hat_x, sqrt(sigma2_x))
-      mr_quantreg_ratios(beta_hat_y_boot, beta_hat_x_boot,
-                  sigma2_y, sigma2_x, bootstrap = NULL)$coefficients$Estimate
-    })
-    theta <- mean(boot_vals)
-    se <- sd(boot_vals)
-  } else if (bootstrap == "wlbs") {
+  if (is.null(se)){
+    se <- 1 / (lambda * sqrt(n) * sqrt(tau * (1 - tau)) * sqrt(mean(w_i^2)))
+  } else if (se == "wlbs") {
     se <- replicate(nboot, {
       s <- rgamma(n, shape = 1); s <- s / mean(s)
-      mr_quantreg_ratios(beta_hat_y, beta_hat_x,
+      mr_quantreg(beta_hat_y, beta_hat_x,
                          sigma2_y, sigma2_x,
-                         weights = s, tau_init = tau, 
-                         bootstrap = NULL)$coefficients$Estimate
+                         weights = s, tau_init = tau_init, 
+                         se = NULL)$coefficients$Estimate
+    }) %>% sd()
+  } else if (se == "boot") {
+    se <- replicate(nboot, {
+      beta_hat_y_boot <- rnorm(n, mean = beta_hat_y, sd = sqrt(sigma2_y))
+      beta_hat_x_boot <- rnorm(n, mean = beta_hat_x, sd = sqrt(sigma2_x))
+      
+      mr_quantreg(beta_hat_y_boot, beta_hat_x_boot,
+                  sigma2_y, sigma2_x,
+                  tau_init = tau_init, 
+                  se = NULL)$coefficients$Estimate
     }) %>% sd()
   }
-  
+
   # Print results if verbose
   if (verbose) {
     cat("Converged after", iter, "iterations\n")
@@ -1120,70 +938,6 @@ mr_quantreg_ratios <- function(beta_hat_y,
       LCL = theta - qnorm(0.975) * se,
       UCL = theta + qnorm(0.975) * se
     ),
-    bic = -2 * loglik + log(n) * (2 + is.null(tau_init)),
-    aic = -2 * loglik + 2 * (2 + is.null(tau_init))
+    tau = tau
   )
-}
-
-#-----------------------------------------
-# Quantile regression with model averaging
-#-----------------------------------------
-mr_quantreg_MA <- function(beta_hat_y,
-                           beta_hat_x,
-                           sigma2_y,
-                           sigma2_x,
-                           tau_seq = seq(0.1, 0.9, 0.05),
-                           theta_init = 0,
-                           lambda_init = 1,
-                           weights = rep(1, length(beta_hat_y)),
-                           tol = 1e-6,
-                           max_iter = 500,
-                           bootstrap = "resampling",
-                           nboot = 200,
-                           verbose = FALSE,
-                           criteria = "BIC") {
-  
-  lapply(tau_seq, function(tau) {
-    mr_quantreg(
-      beta_hat_y = beta_hat_y,
-      beta_hat_x = beta_hat_x,
-      sigma2_y = sigma2_y,
-      sigma2_x = sigma2_x,
-      tau_init = tau,
-      theta_init = theta_init,
-      lambda_init = lambda_init,
-      tol = tol,
-      max_iter = max_iter,
-      bootstrap = bootstrap,
-      nboot = nboot,
-      verbose = verbose
-    )
-  }
-  ) %>%
-    { 
-      # Model averaging based on BIC or AIC
-      if (criteria == "BIC"){
-        bic_values <- sapply(., function(fit) fit$bic)
-        bic_weights <- exp(-0.5 * bic_values)
-        weights <- bic_weights / sum(bic_weights)
-      } else if (criteria == "AIC"){
-        aic_values <- sapply(., function(fit) fit$aic)
-        aic_weights <- exp(-0.5 * aic_values)
-        weights <- aic_weights / sum(aic_weights)
-      }
-      
-      # Weighted average of estimates and standard errors
-      ests <- sapply(., function(fit) fit$coefficients$Estimate)
-      ses <- sapply(., function(fit) fit$coefficients$StdError)
-      
-      est_ma <- sum( weights * ests )
-      se_ma <- sum( weights * sqrt( ses^2 + ( ests - est_ma )^2 ) )
-      
-      data.frame(
-        "Estimate" = est_ma,
-        "StdError" = se_ma,
-        "LCL" = est_ma - qnorm(0.975) * se_ma,
-        "UCL" = est_ma + qnorm(0.975) * se_ma
-      )
-    }
 }
