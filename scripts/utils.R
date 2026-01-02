@@ -314,8 +314,8 @@ fit_mr_contmix <- function(D){
     
     # Check for valid confidence intervals
     valid_ci <- which(
-        res_mr_contmix$Estimate > res_mr_contmix$CILower & 
-        res_mr_contmix$Estimate < res_mr_contmix$CIUpper
+        res_mr_contmix$Estimate >= res_mr_contmix$CILower & 
+        res_mr_contmix$Estimate <= res_mr_contmix$CIUpper
     )
     
     # Output results

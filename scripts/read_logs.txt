@@ -1,13 +1,22 @@
-grep -rl "DUE TO TIME LIMIT" --include="*.out" . \
-  | while read f; do head -n 1 "$f"; done \
-  | awk -F'[ ,]+' '
-    /Running/ {
-      scenario=$2; start=$4; end=$6; size=2;
-      for (s=start; s<=end; s+=size) {
-        e=s+size-1; if (e>end) e=end;
-        print scenario, s, e;
-      }
-    }' \
-  | while read scenario start end; do
-      sbatch ../../scripts/run_job.sh "$scenario" "$start" "$end"
-    done
+cd ~/projects/def-mlegault/gf591137/MRFuse/scripts/
+
+grep -rl "error" \
+  --include="*.out" \
+  --exclude-dir=".ipynb_checkpoints" \
+  --exclude-dir="archived" \
+  ../results/logs/ \
+| while read -r f; do
+    head -n 1 "$f" | awk -F'[ ,]+' -v file="$f" '
+      /Running/ {
+        scenario=$2; start=$4; end=$6; size=2;
+        for (s=start; s<=end; s+=size) {
+          e=s+size-1; if (e>end) e=end;
+          print scenario, s, e, file;
+        }
+      }' \
+    | while read -r scenario start end file; do
+         sbatch run_job.sh "$scenario" "$start" "$end"
+      done
+
+     mv "$f" ../results/logs/archived/
+done
