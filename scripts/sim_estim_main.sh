@@ -22,4 +22,4 @@ START_CHUNK=$((chunk_index * CHUNK_SIZE + 1))
 END_CHUNK=$((START_CHUNK + CHUNK_SIZE - 1))
 
 echo "Running $SCENARIO, chunks $START_CHUNK to $END_CHUNK"
-Rscript sim_estim.R $SCENARIO $START_CHUNK $END_CHUNK
+Rscript sim_estim.R "main" $SCENARIO $START_CHUNK $END_CHUNK

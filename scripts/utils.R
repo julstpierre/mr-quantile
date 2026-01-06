@@ -273,7 +273,7 @@ fit_mr_lasso <- function(D) {
 #---------------------------------------------
 # Fit MR_PRESSO on simulated data
 #---------------------------------------------
-fit_mr_presso <- function(D, dist = "lm"){
+fit_mr_presso <- function(D){
   res_mr_presso <- MRPRESSO::mr_presso(
                              BetaOutcome = "beta_hat_y", 
                              BetaExposure = "beta_hat_x", 

@@ -18,19 +18,20 @@ source("utils.R")
 # -----------------------------
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 3) {
-  stop("Usage: Rscript sim_estim.R <scenario_name> <start_chunk> <end_chunk>")
+if (length(args) < 4) {
+  stop("Usage: Rscript sim_estim.R <scenario> <scenario_name> <start_chunk> <end_chunk>")
 }
 
-scenario_name <- args[1]          # e.g., "D_S1"
-start_idx     <- as.numeric(args[2])  # e.g., 1
-end_idx       <- as.numeric(args[3])  # e.g., 200
+scenario <- args[1]               # e.g., "main"
+scenario_name <- args[2]          # e.g., "D_S1"
+start_idx     <- as.numeric(args[3])  # e.g., 1
+end_idx       <- as.numeric(args[4])  # e.g., 200
 
 # -----------------------------
 # Load simulation data
 # -----------------------------
-for (f in list.files("../data/simulations/main/", pattern = "^D_S[0-9]+\\.RData$")) {
-  load(paste0("../data/simulations/main/", f))
+for (f in list.files(paste0("../data/simulations/", scenario, "/"), pattern = "^D_S[0-9]+\\.RData$")) {
+  load(paste0("../data/simulations/", scenario, "/", f))
   rm(f)
 }
 D <- get(scenario_name)                # Extract the dataset corresponding to scenario_name
@@ -55,9 +56,10 @@ res_mr_quantreg_wlbs   <- lapply(chunk, fit_mr_quantreg, se = "wlbs") %>% do.cal
 res_mr_quantreg_boot   <- lapply(chunk, fit_mr_quantreg, se = "boot") %>% do.call(rbind.data.frame, .)
 res_mr_quantreg_norm   <- lapply(chunk, fit_mr_quantreg, se = NULL) %>% do.call(rbind.data.frame, .)
 res_mr_cML        <- lapply(chunk, fit_mr_cML) %>% do.call(rbind.data.frame, .)
-# res_mr_cML_DP     <- lapply(chunk, fit_mr_cML_DP) %>% do.call(rbind.data.frame, .)
+res_mr_cML_DP     <- lapply(chunk, fit_mr_cML_DP) %>% do.call(rbind.data.frame, .)
+res_mr_presso <- lapply(chunk, fit_mr_presso) %>% do.call(rbind.data.frame, .)
 
-# -----------------------------
+# ----------------------------
 # Combine results into a single data frame and add a column for the model
 # -----------------------------
 tag_method <- function(res_list, method) {
@@ -93,13 +95,14 @@ res_all <- bind_rows(
   ,tag_method(res_mr_quantreg_boot, "mr_quantreg_boot")
   ,tag_method(res_mr_quantreg_norm, "mr_quantreg_norm")
   ,tag_method(res_mr_cML, "mr_cML")
-  #,tag_method(res_mr_cML_DP, "mr_cML_DP")
+  ,tag_method(res_mr_cML_DP, "mr_cML_DP")
+  ,tag_method(res_mr_presso, "mr_presso")
   )
 
 # -----------------------------
 # Save results
 # -----------------------------
-out_dir <- "../results/rds/main"
+out_dir <- paste0("../results/rds/", scenario)
 out_file <- paste0(scenario_name, "_chunk_", start_idx, "_to_", end_idx, ".rds")
 out_path <- file.path(out_dir, out_file)
 saveRDS(res_all, out_path)
