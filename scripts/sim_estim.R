@@ -56,8 +56,11 @@ res_mr_quantreg_wlbs   <- lapply(chunk, fit_mr_quantreg, se = "wlbs") %>% do.cal
 res_mr_quantreg_boot   <- lapply(chunk, fit_mr_quantreg, se = "boot") %>% do.call(rbind.data.frame, .)
 res_mr_quantreg_norm   <- lapply(chunk, fit_mr_quantreg, se = NULL) %>% do.call(rbind.data.frame, .)
 res_mr_cML        <- lapply(chunk, fit_mr_cML) %>% do.call(rbind.data.frame, .)
-res_mr_cML_DP     <- lapply(chunk, fit_mr_cML_DP) %>% do.call(rbind.data.frame, .)
 res_mr_presso <- lapply(chunk, fit_mr_presso) %>% do.call(rbind.data.frame, .)
+
+if (scenario == "weak_invalid_IVs"){
+  res_mr_cML_DP     <- lapply(chunk, fit_mr_cML_DP) %>% do.call(rbind.data.frame, .)
+}
 
 # ----------------------------
 # Combine results into a single data frame and add a column for the model
@@ -81,7 +84,25 @@ tag_method <- function(res_list, method) {
   }
 }
 
-res_all <- bind_rows(
+res_all <- if (scenario == "main"){
+  bind_rows(
+   tag_method(res_mr_ivw, "mr_ivw")
+  ,tag_method(res_mr_ivw_oracle, "mr_ivw_oracle")
+  ,tag_method(res_mr_median, "mr_median")
+  ,tag_method(res_mr_egger, "mr_egger")
+  ,tag_method(res_mr_mode, "mr_mode")
+  ,tag_method(res_mr_raps, "mr_raps")
+  ,tag_method(res_mr_lasso, "mr_lasso")
+  ,tag_method(res_mr_contmix, "mr_contmix")
+  ,tag_method(res_mr_mix, "mr_mix")
+  ,tag_method(res_mr_quantreg_wlbs, "mr_quantreg_wlbs")
+  ,tag_method(res_mr_quantreg_boot, "mr_quantreg_boot")
+  ,tag_method(res_mr_quantreg_norm, "mr_quantreg_norm")
+  ,tag_method(res_mr_cML, "mr_cML")
+  ,tag_method(res_mr_presso, "mr_presso")
+  )
+} else if (scenario == "weak_invalid_IVs"){
+  bind_rows(
    tag_method(res_mr_ivw, "mr_ivw")
   ,tag_method(res_mr_ivw_oracle, "mr_ivw_oracle")
   ,tag_method(res_mr_median, "mr_median")
@@ -98,6 +119,7 @@ res_all <- bind_rows(
   ,tag_method(res_mr_cML_DP, "mr_cML_DP")
   ,tag_method(res_mr_presso, "mr_presso")
   )
+}
 
 # -----------------------------
 # Save results
