@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account=def-mlegault
-#SBATCH --job-name=mr_all
+#SBATCH --job-name=mr_main_slow
 #SBATCH --array=0-839
 #SBATCH --time=10:00:00
 #SBATCH --mem=4G
@@ -21,5 +21,5 @@ CHUNK_SIZE=400
 START_CHUNK=$((chunk_index * CHUNK_SIZE + 1))
 END_CHUNK=$((START_CHUNK + CHUNK_SIZE - 1))
 
-echo "Running $SCENARIO, chunks $START_CHUNK to $END_CHUNK"
-Rscript sim_estim.R "main" $SCENARIO $START_CHUNK $END_CHUNK
+echo "Running $SCENARIO, chunks $START_CHUNK to $END_CHUNK, slow methods"
+Rscript sim_estim.R "main" $SCENARIO $START_CHUNK $END_CHUNK "slow"
