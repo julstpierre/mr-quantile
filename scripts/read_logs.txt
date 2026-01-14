@@ -1,14 +1,14 @@
 cd ~/projects/def-mlegault/gf591137/MRFuse/scripts/
 
-grep -rl "error" \
+grep -rEl "slurmd|error" \
   --include="*.out" \
   --exclude-dir=".ipynb_checkpoints" \
   --exclude-dir="archived" \
   ../results/logs/ \
 | while read -r f; do
-    head -n 1 "$f" | awk -F'[ ,]+' -v file="$f" '
+    grep -m 1 "^Running" "$f" | awk -F'[ ,]+' -v file="$f" '
       /Running/ {
-        scenario=$2; start=$4; end=$6; size=2;
+        scenario=$2; start=$4; end=$6; size=10;
         for (s=start; s<=end; s+=size) {
           e=s+size-1; if (e>end) e=end;
           print scenario, s, e, file;

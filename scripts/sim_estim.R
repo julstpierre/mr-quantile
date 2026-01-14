@@ -45,22 +45,8 @@ chunk <- D[start_idx:end_idx]
 # Run all MR methods
 # -----------------------------
 tag_method <- function(res_list, method) {
-  if (length(res_list) <= 8) {
-    bind_rows(res_list) %>%
+    bind_rows(res_list) %>% 
       mutate(method = method)
-  } else {
-    # Bind all elements first
-    df <- bind_rows(res_list)
-    
-    # Split into two parts: first 4 cols and last 4 cols
-    df_main <- df[, -c(5:8), drop = FALSE] %>%
-      mutate(method = method)
-    
-    df_median <- df[, -c(1:4), drop = FALSE] %>%
-      mutate(method = paste0(method, "_median"))
-    
-    bind_rows(df_main, df_median)
-  }
 }
 
 if (methods == "fast") {

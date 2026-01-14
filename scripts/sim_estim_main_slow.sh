@@ -2,7 +2,7 @@
 #SBATCH --account=def-mlegault
 #SBATCH --job-name=mr_main_slow
 #SBATCH --array=0-839
-#SBATCH --time=10:00:00
+#SBATCH --time=20:00:00
 #SBATCH --mem=4G
 #SBATCH --cpus-per-task=1
 #SBATCH --output=../results/logs/%x_%A_%a.out

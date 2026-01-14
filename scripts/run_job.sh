@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --account=def-mlegault
 #SBATCH --job-name=mr_all
-#SBATCH --time=10:00:00
+#SBATCH --time=05:00:00
 #SBATCH --mem=4G
 #SBATCH --cpus-per-task=1
 #SBATCH --output=../results/logs/%x_%j.out
@@ -14,4 +14,4 @@ START_CHUNK=$2
 END_CHUNK=$3
 
 echo "Running $SCENARIO, chunks $START_CHUNK to $END_CHUNK"
-Rscript sim_estim.R "$SCENARIO" "$START_CHUNK" "$END_CHUNK"
+Rscript sim_estim.R "weak_invalid_IVs" "$SCENARIO" "$START_CHUNK" "$END_CHUNK" "slow"
