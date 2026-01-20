@@ -7,13 +7,13 @@ source("utils.R")
 # Define the simulation parameters
 #-----------------------------------
 num_jobs <- 4
-num_iters <- 2000
 params <- expand.grid(
   p = c(50, 100),
-  theta = c(-0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2), 
-  n = c(50000, 100000, 200000),
+  theta = c(-0.1, -0.05, 0, 0.05, 0.1), 
+  n = c(50000, 100000),
   q = c(0, 0.2, 0.4, 0.6)
-)
+) %>%
+  mutate(num_iter = ifelse(theta == 0, 10000, 2000))
 
 #----------------------------------------------------------------------
 # Simulate data
@@ -24,7 +24,7 @@ for (scenario_id in 1:nrow(params)){
   
   set.seed(2025121900 + scenario_id)
   
-  res <- replicate(num_iters, df_param) %>%
+  res <- replicate(df_param[[1]]$num_iter, df_param) %>%
     mclapply(mc.cores = num_jobs, sim_indv_dat, mc.set.seed = TRUE)
   
   # Save file

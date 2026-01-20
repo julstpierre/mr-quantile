@@ -13,7 +13,7 @@ library(ggplot2)
 # -----------------------------
 # Parameters
 # -----------------------------
-sim_name <- c("main", "weak_invalid_IVs")[2]
+sim_name <- c("main", "weak_invalid_IVs")[1]
 results_dir <- paste0("../results/rds/", sim_name)
 plot_dir <- paste0("../results/plots/", sim_name)
 scenario_prefix <- "D_S"
@@ -60,7 +60,8 @@ read_and_expand <- function(path) {
 all_results <- map_dfr(all_files, read_and_expand) %>%
   mutate(scenario = str_extract(source_file, "S\\d+(_null)?")) %>%
   left_join(scenario_metadata, by = "scenario") %>%
-  select(-source_file)
+  select(-source_file) %>%
+  filter(!method %in% c("mr_quantreg_wlbs"))
 
 # -----------------------------
 # Summary statistics
@@ -71,15 +72,14 @@ summary_stats <- all_results %>%
     theta = mean(theta),
     mean = mean(Estimate, na.rm = TRUE),
     bias = mean(Estimate - theta, na.rm = TRUE),
-    rmse = sqrt(mean((Estimate - theta)^2, na.rm = TRUE)),
+    se = mean(StdError, na.rm = TRUE),
     sd = sd(Estimate, na.rm = TRUE),
     coverage = mean(theta >= LCL & theta <= UCL, na.rm = TRUE),
     power = mean(LCL > 0 | UCL < 0, na.rm = TRUE),
     ci_width = mean(UCL - LCL, na.rm = TRUE),
     iter = n(),
     .groups = "drop"
-  ) %>%
-  filter(!method %in% c("mr_quantreg", "mr_quantreg_norm"))
+  )
 
 if (sim_name == "weak_invalid_IVs") {
 
@@ -130,13 +130,13 @@ if (sim_name == "weak_invalid_IVs") {
 method_levels <- c(
   "mr_cML", "mr_cML_DP", "mr_contmix", "mr_egger", "mr_ivw",
   "mr_ivw_oracle", "mr_lasso", "mr_median", "mr_mix",
-  "mr_mode", "mr_quantreg_boot", "mr_quantreg_wlbs", "mr_raps"
+  "mr_mode", "mr_presso", "mr_quantreg_boot", "mr_raps"
 )
 
 tol12 <- c(
   "#1F78B4", "grey", "black", "#E31A1C", "#FF7F00",
   "#6A3D9A", "#A6CEE3", "#B2DF8A", "#FB9A99",
-  "#FDBF6F", "#33A02C", "#81A02C", "#B15928"
+  "#FDBF6F", "#33A02C", "#CC79A7", "#B15928"
 )
 
 method_colors <- setNames(tol12, method_levels)
@@ -155,10 +155,13 @@ plot_typeI_error <- function(
   
     ggplot(filter(data, theta %in% theta_val, n %in% n_val), aes(x = theta, y = power, fill = method)) +
       geom_bar(stat = "identity", position = "dodge") +
-      geom_hline(aes(yintercept = 0.05), linetype = "dashed", color = "red") +
+      geom_hline(aes(yintercept = 0.05), linetype = "dashed", color = "black") +
       scale_fill_manual(values = method_colors, drop = FALSE) +
       geom_text(
-        aes(label = round(power, 2)),
+        aes(
+          y = pmax(power, 0.05),
+          label = round(power, 3)
+        ),
         position = position_dodge(width = 0.9),
         vjust = -0.3, size = 2.5
       ) +
@@ -291,7 +294,7 @@ if (sim_name == "weak_invalid_IVs"){
     plot_power(
       data = summary_stats,
       n = 50000,
-      p = 50,
+      p = 100,
       facet_row = "q",
       facet_col = "theta",
       facet_labels = list(
@@ -302,33 +305,55 @@ if (sim_name == "weak_invalid_IVs"){
 }
 
 ## 3. Plot Coverage
-plot_coverage <- function(data, 
-                         h2_u_val, 
-                         theta_val = c(-0.2, -0.1, -0.05, 0.05, 0.1, 0.2), 
-                         n = 25000,
-                         methods) {
+plot_coverage <- function(
+    data,
+    theta_val = c(-0.2, -0.1, -0.05, 0.05, 0.1, 0.2),
+    h2_u_val = NULL,
+    n_val,
+    p_val = 50,
+    methods = NULL,
+    facet_row,
+    facet_col,
+    facet_labels = list()
+) {
   
-  ggplot(filter(data, h2_u == h2_u_val, theta %in% theta_val, method %in% methods), aes(x = theta, y = coverage, fill = method)) +
-    geom_bar(stat = "identity", position = "dodge", width = 1.5) +
-    coord_cartesian(ylim = c(0.85, 1)) + 
-    # geom_hline(aes(yintercept = 0.95), linetype = "dashed", color = "red") +
-    scale_fill_manual(values = tol12) +
+  facet_formula <- as.formula(paste(facet_row, "~", facet_col))
+  
+  title_expr <- if (is.null(h2_u_val)) {
+    bquote("Coverage, n = " * .(n_val) * ", " * p == .(p_val))
+  } else {
+    bquote("Coverage, n = " * .(n_val) * ", " * h[u]^2 == .(h2_u_val))
+  }
+  
+  ggplot(
+    dplyr::filter(
+      data,
+      theta %in% theta_val,
+      n %in% n_val,
+      p %in% p_val,
+      if (!is.null(methods)) method %in% methods else TRUE,
+      if (!is.null(h2_u_val)) h2_u %in% h2_u_val else TRUE
+    ),
+    aes(x = theta, y = coverage, fill = method)
+  ) +
+    geom_bar(stat = "identity", position = "dodge", width = 0.9) +
+    scale_fill_manual(values = method_colors, drop = FALSE) +
     geom_text(
       aes(label = round(coverage, 2)),
-      position = position_dodge(width = 1.5),
-      vjust = -0.3, size = 2.5
+      position = position_dodge(width = 0.9),
+      vjust = -0.3,
+      size = 2.5
     ) +
+    coord_cartesian(ylim = c(0.85, 1.05)) +
+    # geom_hline(yintercept = 0.95, linetype = "dashed", color = "red") +
     facet_grid(
-      h2_y ~ theta,
-      labeller = labeller(
-        h2_y = function(x) paste0("h²ᵧ = ", x),
-        theta = function(x) paste0("θ = ", x)
-      )
+      facet_formula,
+      labeller = labeller(!!!facet_labels)
     ) +
     theme_minimal(base_size = 13) +
     labs(
-      title = bquote("Coverage, n = " * .(n) * ", " * h[u]^2 == .(h2_u_val)),
-      y = "Coverage percentage",
+      title = title_expr,
+      y = "Coverage",
       x = "Method"
     ) +
     theme(
@@ -338,85 +363,68 @@ plot_coverage <- function(data,
     )
 }
 
-plot_coverage(summary_stats, h2_u_val = 0, n = 25000, methods = c("mr_cML_DP", "mr_egger", "mr_ivw", "mr_ivw_oracle", "mr_quantreg_norm", "mr_quantreg_wlbs", "mr_raps"))
-plot_coverage(summary_stats, h2_u_val = 0.1, n = 25000, methods = c("mr_cML_DP", "mr_ivw_oracle", "mr_quantreg_norm", "mr_quantreg_wlbs"))
-
-## 4. Plot RMSE
-plot_rmse <- function(data, 
-                          h2_u_val, 
-                          theta_val = c(-0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2), 
-                          n = 25000,
-                          methods) {
+if (sim_name == "weak_invalid_IVs"){
+  plot_coverage(
+    data = summary_stats,
+    h2_u_val = 0,
+    n = 25000,
+    methods = c("mr_cML_DP", "mr_egger", "mr_ivw", "mr_ivw_oracle", "mr_quantreg_wlbs", "mr_raps"),
+    facet_row = "h2_y",
+    facet_col = "theta",
+    facet_labels = list(
+      h2_y = function(x) paste0("h²ᵧ = ", x),
+      theta = function(x) paste0("θ = ", x)
+    )
+  )
   
-  ggplot(filter(data, h2_u == h2_u_val, theta %in% theta_val, method %in% methods), aes(x = theta, y = rmse, fill = method)) +
-    geom_bar(stat = "identity", position = "dodge", width = 2.5) +
-    # coord_cartesian(ylim = c(0.85, 1)) + 
-    scale_fill_manual(values = tol12) +
-    geom_text(
-      aes(label = round(rmse, 3)),
-      position = position_dodge(width = 2.5),
-      vjust = -0.3, size = 2.25
-    ) +
-    facet_grid(
-      h2_y ~ theta,
-      labeller = labeller(
-        h2_y = function(x) paste0("h²ᵧ = ", x),
-        theta = function(x) paste0("θ = ", x)
-      )
-    ) +
-    theme_minimal(base_size = 13) +
-    labs(
-      title = bquote("RMSE, n = " * .(n) * ", " * h[u]^2 == .(h2_u_val)),
-      y = "RMSE",
-      x = "Method"
-    ) +
-    theme(
-      axis.text.x = element_blank(),
-      legend.position = "bottom",
-      legend.title = element_blank()
+  plot_coverage(
+    data = summary_stats,
+    h2_u_val = 0.1,
+    n = 25000,
+    methods = c("mr_cML_DP", "mr_ivw_oracle", "mr_quantreg_wlbs"),
+    facet_row = "h2_y",
+    facet_col = "theta",
+    facet_labels = list(
+      h2_y = function(x) paste0("h²ᵧ = ", x),
+      theta = function(x) paste0("θ = ", x)
     )
+  )
+} else if (sim_name == "main"){
+  plot_coverage(
+    data = summary_stats,
+    n = 50000,
+    p = 50,
+    facet_row = "q",
+    facet_col = "theta",
+    facet_labels = list(
+      theta = function(x) paste0("θ = ", x),
+      q = function(x) paste0("Invalid IVs = ", 100 * as.numeric(x), "%")
+    )
+  )
 }
 
-plot_rmse(summary_stats, h2_u_val = 0, n = 25000, methods = c("mr_cML_DP", "mr_egger", "mr_ivw", "mr_ivw_oracle", "mr_quantreg_wlbs", "mr_raps"))
-plot_rmse(summary_stats, h2_u_val = 0.1, n = 25000, methods = c("mr_cML_DP", "mr_ivw_oracle", "mr_quantreg_wlbs"))
-
-## 5. Plot bias
-plot_bias <- function(data, 
-                        h2_u_val, 
-                        theta_val = c(-0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2), 
-                        n = 25000,
-                        methods) {
-  
-  ggplot(filter(data, h2_u == h2_u_val, theta %in% theta_val, method %in% methods), aes(x = theta, y = bias, fill = method)) +
-    geom_bar(stat = "identity", position = "dodge", width = 2.5) +
-    # coord_cartesian(ylim = c(0.85, 1)) + 
-    scale_fill_manual(values = tol12) +
-    geom_text(
-      aes(label = round(bias, 3)),
-      position = position_dodge(width = 2.5),
-      vjust = -0.3, size = 2.25
-    ) +
-    facet_grid(
-      h2_y ~ theta,
-      labeller = labeller(
-        h2_y = function(x) paste0("h²ᵧ = ", x),
-        theta = function(x) paste0("θ = ", x)
-      )
-    ) +
-    theme_minimal(base_size = 13) +
-    labs(
-      title = bquote("Bias, n = " * .(n) * ", " * h[u]^2 == .(h2_u_val)),
-      y = "Bias",
-      x = "Method"
-    ) +
-    theme(
-      axis.text.x = element_blank(),
-      legend.position = "bottom",
-      legend.title = element_blank()
-    )
-}
-plot_bias(summary_stats, h2_u_val = 0, n = 25000, methods = c("mr_cML_DP", "mr_egger", "mr_ivw", "mr_ivw_oracle", "mr_quantreg", "mr_raps"))
-plot_bias(summary_stats, h2_u_val = 0.1, n = 25000, methods = c("mr_cML_DP", "mr_ivw_oracle", "mr_quantreg"))
+# Plot bias
+filter(all_results, p == 100, theta == -0.2, n == 200000, q == 0.6) %>%
+  filter(method %in% c("mr_median", "mr_quantreg_boot", "mr_cML")) %>%
+  mutate(bias = Estimate - theta) %>%
+  ggplot(aes(x = method, y = bias, fill = method)) +
+  geom_boxplot() +
+  coord_cartesian(ylim = c(-0.05, 0.05)) +
+  scale_fill_manual(values = method_colors, drop = FALSE) +
+  theme_minimal(base_size = 13) +
+  labs(
+    title = bquote("Bias distribution, n = " * .(50000) *
+      ", p = " * .(50) * ", Invalid IVs = " * .(0.6 * 100) * "%, " *
+      theta == .(0)
+    ),
+    y = "Bias",
+    x = "Method"
+  ) +
+  theme(
+    axis.text.x = element_blank(),
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
 
 # -----------------------------
 # Done

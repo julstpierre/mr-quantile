@@ -18,7 +18,7 @@ source("utils.R")
 # -----------------------------
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 4) {
+if (length(args) < 5) {
   stop("Usage: Rscript sim_estim.R <scenario> <scenario_name> <start_chunk> <end_chunk>")
 }
 
@@ -66,8 +66,8 @@ if (methods == "fast") {
     tag_method(lapply(chunk, fit_mr_lasso), "mr_lasso"),
     tag_method(lapply(chunk, fit_mr_contmix), "mr_contmix"),
     tag_method(lapply(chunk, fit_mr_mix), "mr_mix"),
-    tag_method(lapply(chunk, fit_mr_quantreg, se = "wlbs"), "mr_quantreg_wlbs"),
-    tag_method(lapply(chunk, fit_mr_quantreg, se = "boot"), "mr_quantreg_boot"),
+    tag_method(lapply(chunk, fit_mr_quantreg, se = "boot"), "mr_quantreg"),
+    tag_method(lapply(chunk, fit_mr_quantreg_ma, se = "boot"), "mr_quantreg_ma"),
     tag_method(lapply(chunk, fit_mr_cML), "mr_cML")
   )
 }

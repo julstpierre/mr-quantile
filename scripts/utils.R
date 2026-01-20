@@ -84,7 +84,7 @@ sim_indv_dat <- function(args){
   
   # Simulate outcome
   alpha <- rep(0, p)
-  alpha[invalid.IVs] <- runif(m, 0.2, 0.3)
+  alpha[invalid.IVs] <- runif(m, 0.1, 0.2)
   Y <- X %*% theta + G %*% alpha + U + epsilon_y
   
   # Summary stats for X
@@ -107,7 +107,9 @@ sim_indv_dat <- function(args){
               "n" = n,
               "p" = p,
               "q" = q,
-              "invalid.IVs" = invalid.IVs
+              "invalid.IVs" = invalid.IVs,
+              "alpha" = alpha,
+              "phi" = phi
   )
   )
 }
@@ -206,10 +208,44 @@ fit_mr_cML_DP <- function(D){
 #---------------------------
 # Fit Quantile Regression
 #---------------------------
-fit_mr_quantreg <- function(D, se = NULL, verbose = FALSE, tau = NULL, nboot = 200){
+fit_mr_quantreg <- function(D, se = "boot", verbose = FALSE, tau = NULL, nboot = 200){
   mr_quantreg(D$beta_hat_y, D$beta_hat_x, D$sigma2_y, D$sigma2_x, 
-              se = se, verbose = verbose, tau_init = tau, nboot = nboot)$coefficients %>%
+              se = se, verbose = verbose, tau = tau, nboot = nboot)$coefficients %>%
     as_tibble()
+}
+
+fit_mr_quantreg_ma <- function(D, se = "boot", weights = "bic",
+                               tau_seq = seq(0.1, 0.9, by = 0.05), 
+                               nboot = 200){
+  
+  res <- lapply(tau_seq, function(tau_val) {
+    fit <- mr_quantreg(D$beta_hat_y, 
+                       D$beta_hat_x,
+                       D$sigma2_y,
+                       D$sigma2_x,
+                       se = se, 
+                       tau = tau_val
+    )
+    
+    tibble(tau = tau_val, fit$coefficients, aic = fit$aic, bic = fit$bic)
+  }) %>%
+    bind_rows()
+  
+  if (weights == "bic"){
+    w_k <- exp(-res$bic / 2) / sum(exp(-res$bic / 2))
+  } else if (weights == "aic"){
+    w_k <- exp(-res$aic / 2) / sum(exp(-res$aic / 2))
+  }
+  
+  theta_k <- res$Estimate
+  theta_hat <- sum(w_k * theta_k)
+  theta_se <- sum(w_k * sqrt(res$StdError^2 + (theta_k - theta_hat)^2))
+  tibble(
+    Estimate = theta_hat,
+    StdError = theta_se,
+    LCL = theta_hat - 1.96 * theta_se,
+    UCL = theta_hat + 1.96 * theta_se
+  )
 }
 
 #---------------------------------------------
@@ -278,7 +314,9 @@ fit_mr_presso <- function(D){
                              BetaOutcome = "beta_hat_y", 
                              BetaExposure = "beta_hat_x", 
                              SdOutcome = "sqrt_sigma2_y", 
-                             SdExposure = "sqrt_sigma2_x", 
+                             SdExposure = "sqrt_sigma2_x",
+                             OUTLIERtest = TRUE, 
+                             DISTORTIONtest = TRUE,
                              data = data.frame(beta_hat_x = D$beta_hat_x,
                                                beta_hat_y = D$beta_hat_y,
                                                sqrt_sigma2_x = sqrt(D$sigma2_x),
@@ -286,21 +324,25 @@ fit_mr_presso <- function(D){
                              )
   )
   
-  if (is.na(res_mr_presso$`Main MR results`$`Causal Estimate`[2])){
-      tibble(
-        Estimate = res_mr_presso$`Main MR results`$`Causal Estimate`[1],
-        StdError = res_mr_presso$`Main MR results`$`Sd`[1]
-      ) %>% mutate(
-        LCL = Estimate - qnorm(0.975) * StdError,
-        UCL = Estimate + qnorm(0.975) * StdError
-      )
-  } else {
+  p_global <- res_mr_presso$`MR-PRESSO results`$`Global Test`$Pvalue
+  
+  if(!is.na(p_global) && p_global < 0.05){
       tibble(
         Estimate = res_mr_presso$`Main MR results`$`Causal Estimate`[2],
         StdError = res_mr_presso$`Main MR results`$`Sd`[2]
       ) %>% mutate(
         LCL = Estimate - qnorm(0.975) * StdError,
-        UCL = Estimate + qnorm(0.975) * StdError
+        UCL = Estimate + qnorm(0.975) * StdError,
+        Pvalue = p_global
+      )
+  } else{
+      tibble(
+        Estimate = res_mr_presso$`Main MR results`$`Causal Estimate`[1],
+        StdError = res_mr_presso$`Main MR results`$`Sd`[1]
+      ) %>% mutate(
+        LCL = Estimate - qnorm(0.975) * StdError,
+        UCL = Estimate + qnorm(0.975) * StdError,
+        Pvalue = p_global
       )
   }
 }
@@ -318,6 +360,11 @@ fit_mr_contmix <- function(D){
         res_mr_contmix$Estimate <= res_mr_contmix$CIUpper
     )
     
+    if (length(res_mr_contmix$CILower) > 1 | length(res_mr_contmix$CIUpper) > 1) {
+      warning("Multiple valid confidence intervals found in MR-ContMix. 
+              Returning only one.")
+    }
+    
     # Output results
     tibble(
       Estimate = res_mr_contmix$Estimate,
@@ -325,6 +372,7 @@ fit_mr_contmix <- function(D){
     ) %>% mutate(
       LCL = res_mr_contmix$CILower[valid_ci],
       UCL = res_mr_contmix$CIUpper[valid_ci],
+      Pvalue = res_mr_contmix$Pvalue
     )
 }
 
@@ -845,13 +893,13 @@ mr_quantreg <- function(beta_hat_y,
                               beta_hat_x,
                               sigma2_y,
                               sigma2_x,
-                              tau_init = NULL,
+                              tau = NULL,
                               lambda_init = 1,
                               theta_init = 0,
                               weights = rep(1, length(beta_hat_y)),
                               tol = 1e-5,
                               max_iter = 500,
-                              se = NULL,
+                              se = "boot",
                               nboot = 200,
                               verbose = FALSE) {
   
@@ -867,6 +915,7 @@ mr_quantreg <- function(beta_hat_y,
   lambda <- lambda_init
   lambda_i <- lambda * w_i
   theta <- theta_init
+  tau_init <- tau
   tau <- ifelse(is.null(tau_init), 0.5, tau_init)
   loglik_prev <- -Inf
   
@@ -883,10 +932,8 @@ mr_quantreg <- function(beta_hat_y,
     theta <- weighted_quantile(ratios, weights * w_i, tau )
     
     # Update lambda
-    if (is.null(tau_init)){
-      lambda <- sum(weights) / sum(weights * w_i * rho_tau(ratios - theta, tau))
-      lambda_i <- lambda * w_i
-    }
+    lambda <- sum(weights) / sum(weights * w_i * rho_tau(ratios - theta, tau))
+    lambda_i <- lambda * w_i
     
     # Log-likelihood
     loglik <- sum(weights) * (log(lambda) + log(tau * (1 - tau))) -
@@ -903,24 +950,33 @@ mr_quantreg <- function(beta_hat_y,
   # Bootstrap SE
   if (is.null(se)){
     se <- 1 / (lambda * sqrt(n) * sqrt(tau * (1 - tau)) * sqrt(mean(w_i^2)))
+    b <- theta
   } else if (se == "wlbs") {
     se <- replicate(nboot, {
       s <- rgamma(n, shape = 1); s <- s / mean(s)
       mr_quantreg(beta_hat_y, beta_hat_x,
                          sigma2_y, sigma2_x,
-                         weights = s, tau_init = tau_init, 
+                         weights = s, tau = tau_init, 
                          se = NULL)$coefficients$Estimate
     }) %>% sd()
   } else if (se == "boot") {
-    se <- replicate(nboot, {
+    theta_boot <- replicate(nboot, {
       beta_hat_y_boot <- rnorm(n, mean = beta_hat_y, sd = sqrt(sigma2_y))
       beta_hat_x_boot <- rnorm(n, mean = beta_hat_x, sd = sqrt(sigma2_x))
       
-      mr_quantreg(beta_hat_y_boot, beta_hat_x_boot,
-                  sigma2_y, sigma2_x,
-                  tau_init = tau_init, 
-                  se = NULL)$coefficients$Estimate
-    }) %>% sd()
+      mr_quantreg(
+        beta_hat_y_boot,
+        beta_hat_x_boot,
+        sigma2_y,
+        sigma2_x,
+        tau = tau_init,
+        se = NULL
+      )$coefficients$Estimate
+    })
+    
+    se <- sd(theta_boot)
+    b <- mean(theta_boot)
+    
   }
 
   # Print results if verbose
@@ -933,11 +989,14 @@ mr_quantreg <- function(beta_hat_y,
   # Return data frame
   list(
     coefficients = data.frame(
-      Estimate = theta,
+      Estimate = 2 * theta - b,
       StdError = se,
       LCL = theta - qnorm(0.975) * se,
       UCL = theta + qnorm(0.975) * se
     ),
-    tau = tau
+    tau = tau,
+    lambda = lambda,
+    aic = -2 * loglik + 2 * (2 + !is.null(tau_init)),
+    bic = -2 * loglik + log(n) * (2 + !is.null(tau_init))
   )
 }
