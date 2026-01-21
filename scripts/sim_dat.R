@@ -9,7 +9,7 @@ source("utils.R")
 num_jobs <- 4
 params <- expand.grid(
   p = 50, 
-  n = 25000, 
+  n = 50000, 
   theta = c(-0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2), 
   h2_x = 0.5, 
   h2_y = c(0.1, 0.2, 0.4, 0.6), 
