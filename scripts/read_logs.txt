@@ -1,4 +1,4 @@
-cd ~/projects/def-mlegault/gf591137/MRFuse/scripts/
+cd ~/projects/def-mlegault/gf591137/mr-quantile/scripts/
 
 grep -rEl "slurmd|error" \
   --include="*.out" \

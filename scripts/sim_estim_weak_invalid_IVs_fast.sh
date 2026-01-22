@@ -3,11 +3,11 @@
 #SBATCH --job-name=mr_weak_invalid_IVs_fast
 #SBATCH --array=0-439
 #SBATCH --time=10:00:00
-#SBATCH --mem=4G
+#SBATCH --mem=5G
 #SBATCH --cpus-per-task=1
 #SBATCH --output=../results/logs/%x_%A_%a.out
 
-cd ~/projects/def-mlegault/gf591137/MRFuse/scripts/
+cd ~/projects/def-mlegault/gf591137/mr-quantile/scripts/
 module load r
 
 # -----------------------------

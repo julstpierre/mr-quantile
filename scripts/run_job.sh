@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --output=../results/logs/%x_%j.out
 
-cd ~/projects/def-mlegault/gf591137/MRFuse/scripts/
+cd ~/projects/def-mlegault/gf591137/mr-quantile/scripts/
 module load r
 
 SCENARIO=$1

@@ -2,6 +2,7 @@
 .Rapp.history
 .DS_Store
 results/logs
+data/simulations/logs
 scripts/.ipynb_checkpoints/
 case_study
 scripts/.RDataTmp

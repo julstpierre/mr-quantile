@@ -58,12 +58,13 @@ sim_indv_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(theta = 0, p = 50, n = 50000, q = 0.2)
+  # args <- list(theta = 0, p = 30, n = 20000, q = 0.6, InSIDE = TRUE)
   n <- args$n 
   theta <- args$theta
   p <- args$p
   q <- args$q
   m <- q * p
+  InSIDE <- args$InSIDE
   
   # Simulate genetic data, errors and invalid IVs
   maf <- runif(p, 0.1, 0.3)
@@ -75,16 +76,22 @@ sim_indv_dat <- function(args){
   
   # Simulate confounders
   phi <- rep(0, p)
-  phi[invalid.IVs] <- runif(m, -0.1, 0.1)
+  if (!InSIDE){ 
+    phi[invalid.IVs] <- runif(m, -0.1, 0.1)
+  }
   U <- G %*% phi + epsilon_u
   
   # Simulate exposure
-  gamma <- runif(p, 0.1, 0.2) * sample(c(-1, 1), size = p, replace = TRUE)
+  gamma <- runif(p, 0.03, 0.1) * sample(c(-1, 1), size = p, replace = TRUE)
   X <- G %*% gamma + U + epsilon_x
+  
+  # F-statistic
+  (R2 <- var(G %*% gamma) / var(X))
+  R2 / (1 - R2) * (n - p - 1) / p
   
   # Simulate outcome
   alpha <- rep(0, p)
-  alpha[invalid.IVs] <- runif(m, 0.1, 0.2)
+  alpha[invalid.IVs] <- runif(m, 0, 0.2)
   Y <- X %*% theta + G %*% alpha + U + epsilon_y
   
   # Summary stats for X
@@ -950,7 +957,6 @@ mr_quantreg <- function(beta_hat_y,
   # Bootstrap SE
   if (is.null(se)){
     se <- 1 / (lambda * sqrt(n) * sqrt(tau * (1 - tau)) * sqrt(mean(w_i^2)))
-    b <- theta
   } else if (se == "wlbs") {
     se <- replicate(nboot, {
       s <- rgamma(n, shape = 1); s <- s / mean(s)
@@ -960,7 +966,7 @@ mr_quantreg <- function(beta_hat_y,
                          se = NULL)$coefficients$Estimate
     }) %>% sd()
   } else if (se == "boot") {
-    theta_boot <- replicate(nboot, {
+    se <- replicate(nboot, {
       beta_hat_y_boot <- rnorm(n, mean = beta_hat_y, sd = sqrt(sigma2_y))
       beta_hat_x_boot <- rnorm(n, mean = beta_hat_x, sd = sqrt(sigma2_x))
       
@@ -972,10 +978,7 @@ mr_quantreg <- function(beta_hat_y,
         tau = tau_init,
         se = NULL
       )$coefficients$Estimate
-    })
-    
-    se <- sd(theta_boot)
-    b <- mean(theta_boot)
+    }) %>% sd()
     
   }
 
@@ -989,7 +992,7 @@ mr_quantreg <- function(beta_hat_y,
   # Return data frame
   list(
     coefficients = data.frame(
-      Estimate = 2 * theta - b,
+      Estimate = theta,
       StdError = se,
       LCL = theta - qnorm(0.975) * se,
       UCL = theta + qnorm(0.975) * se
