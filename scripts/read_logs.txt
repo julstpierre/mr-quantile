@@ -8,14 +8,14 @@ grep -rEl "slurmd|error" \
 | while read -r f; do
     grep -m 1 "^Running" "$f" | awk -F'[ ,]+' -v file="$f" '
       /Running/ {
-        scenario=$2; start=$4; end=$6; size=10;
+        scenario_name=$2; start=$4; end=$6; size=50;
         for (s=start; s<=end; s+=size) {
           e=s+size-1; if (e>end) e=end;
-          print scenario, s, e, file;
+          print scenario_name, s, e, file;
         }
       }' \
-    | while read -r scenario start end file; do
-         sbatch run_job.sh "$scenario" "$start" "$end"
+    | while read -r scenario_name start end file; do
+         sbatch run_job.sh "weak_invalid_IVs" "$scenario_name" "$start" "$end" "fast"
       done
 
      mv "$f" ../results/logs/archived/

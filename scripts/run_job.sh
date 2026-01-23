@@ -10,8 +10,10 @@ cd ~/projects/def-mlegault/gf591137/mr-quantile/scripts/
 module load r
 
 SCENARIO=$1
-START_CHUNK=$2
-END_CHUNK=$3
+SCENARIO_NAME=$2
+START_CHUNK=$3
+END_CHUNK=$4
+METHODS=$5
 
-echo "Running $SCENARIO, chunks $START_CHUNK to $END_CHUNK"
-Rscript sim_estim.R "weak_invalid_IVs" "$SCENARIO" "$START_CHUNK" "$END_CHUNK" "slow"
+echo "Running $SCENARIO $SCENARIO_NAME, chunks $START_CHUNK to $END_CHUNK, $METHODS methods"
+Rscript sim_estim.R "$SCENARIO" "$SCENARIO_NAME" "$START_CHUNK" "$END_CHUNK" "$METHODS"

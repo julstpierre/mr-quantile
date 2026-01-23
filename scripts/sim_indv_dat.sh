@@ -23,4 +23,4 @@ echo "Running scenario D_S: ${SCENARIO_ID}"
 # -----------------------------
 # Run simulation
 # -----------------------------
-Rscript sim_indv_main.R ${SCENARIO_ID}
+Rscript sim_indv_dat.R ${SCENARIO_ID}
