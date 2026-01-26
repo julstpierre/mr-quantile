@@ -1,22 +1,22 @@
 cd ~/projects/def-mlegault/gf591137/mr-quantile/scripts/
 
-grep -rEl "slurmd|error" \
+grep -rEL "Done" \
   --include="*.out" \
   --exclude-dir=".ipynb_checkpoints" \
   --exclude-dir="archived" \
-  ../results/logs/ \
+  ../results/logs/  \
 | while read -r f; do
     grep -m 1 "^Running" "$f" | awk -F'[ ,]+' -v file="$f" '
       /Running/ {
-        scenario_name=$2; start=$4; end=$6; size=50;
+        scenario=$2; start=$4; end=$6; size=2;
         for (s=start; s<=end; s+=size) {
           e=s+size-1; if (e>end) e=end;
-          print scenario_name, s, e, file;
+          print scenario, s, e, file;
         }
       }' \
-    | while read -r scenario_name start end file; do
-         sbatch run_job.sh "weak_invalid_IVs" "$scenario_name" "$start" "$end" "fast"
+    | while read -r scenario start end file; do
+           sbatch run_job.sh "main" "$scenario" "$start" "$end" "fast"
       done
 
-     mv "$f" ../results/logs/archived/
+       mv "$f" ../results/logs/archived/
 done

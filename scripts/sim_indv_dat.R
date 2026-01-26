@@ -26,6 +26,7 @@ params <- expand.grid(
   q = c(0, 0.2, 0.4, 0.6),
   InSIDE = c(TRUE, FALSE)
 ) %>%
+  filter(!(InSIDE == FALSE & q == 0)) %>%
   mutate(num_iter = ifelse(theta == 0, 10000, 2000))
 
 df_param <- params[scenario_id, ] %>% list()

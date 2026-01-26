@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --account=def-mlegault
 #SBATCH --job-name=sim_indv_dat
-#SBATCH --array=1-48
+#SBATCH --array=1-42
 #SBATCH --time=05:00:00
 #SBATCH --mem=4G
 #SBATCH --cpus-per-task=1
@@ -18,7 +18,7 @@ module load r
 # -----------------------------
 SCENARIO_ID=${SLURM_ARRAY_TASK_ID}
 
-echo "Running scenario D_S: ${SCENARIO_ID}"
+echo "Running scenario D_S${SCENARIO_ID}"
 
 # -----------------------------
 # Run simulation

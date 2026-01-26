@@ -18,10 +18,6 @@ source("utils.R")
 # -----------------------------
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 5) {
-  stop("Usage: Rscript sim_estim.R <scenario> <scenario_name> <start_chunk> <end_chunk>")
-}
-
 scenario <- args[1]               # e.g., "main"
 scenario_name <- args[2]          # e.g., "D_S1"
 start_idx     <- as.numeric(args[3])  # e.g., 1
