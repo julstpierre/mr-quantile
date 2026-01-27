@@ -82,7 +82,7 @@ sim_indv_dat <- function(args){
   U <- G %*% phi + epsilon_u
   
   # Simulate exposure
-  gamma <- runif(p, 0.03, 0.1) * sample(c(-1, 1), size = p, replace = TRUE)
+  gamma <- runif(p, 0.1, 0.2) * sample(c(-1, 1), size = p, replace = TRUE)
   X <- G %*% gamma + U + epsilon_x
   
   # F-statistic
@@ -91,7 +91,7 @@ sim_indv_dat <- function(args){
   
   # Simulate outcome
   alpha <- rep(0, p)
-  alpha[invalid.IVs] <- runif(m, 0, 0.2)
+  alpha[invalid.IVs] <- runif(m, 0.2, 0.3)
   Y <- X %*% theta + G %*% alpha + U + epsilon_y
   
   # Summary stats for X
