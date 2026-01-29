@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --account=def-mlegault
 #SBATCH --job-name=mr_all
-#SBATCH --time=05:00:00
+#SBATCH --time=10:00:00
 #SBATCH --mem=4G
 #SBATCH --cpus-per-task=1
 #SBATCH --output=../results/logs/%x_%j.out

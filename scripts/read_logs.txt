@@ -4,19 +4,19 @@ grep -rEL "Done" \
   --include="*.out" \
   --exclude-dir=".ipynb_checkpoints" \
   --exclude-dir="archived" \
-  ../results/logs/  \
+  ../results/logs/ \
 | while read -r f; do
     grep -m 1 "^Running" "$f" | awk -F'[ ,]+' -v file="$f" '
       /Running/ {
-        scenario=$2; start=$4; end=$6; size=2;
+        scenario=$2; start=$4; end=$6; size=100;
         for (s=start; s<=end; s+=size) {
           e=s+size-1; if (e>end) e=end;
           print scenario, s, e, file;
         }
       }' \
     | while read -r scenario start end file; do
-           sbatch run_job.sh "main" "$scenario" "$start" "$end" "fast"
+         sbatch run_job.sh "main" "$scenario" "$start" "$end" "slow"
       done
 
-       mv "$f" ../results/logs/archived/
+         mv "$f" ../results/logs/archived/
 done
