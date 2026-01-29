@@ -933,6 +933,7 @@ mr_quantreg <- function(beta_hat_y,
     if (is.null(tau_init)){
       a <- sum(weights * lambda_i * (ratios - theta))
       tau <- ( a + 2 * sum(weights) - sqrt(a^2 + 4 * sum(weights)^2)) / ( 2 * a )
+      tau <- min(max(tau, 0.1), 0.9)
     }
     
     # Update theta
@@ -956,15 +957,8 @@ mr_quantreg <- function(beta_hat_y,
   
   # Bootstrap SE
   if (is.null(se)){
-    se <- 1 / (lambda * sqrt(n) * sqrt(tau * (1 - tau)) * sqrt(mean(w_i^2)))
-  } else if (se == "wlbs") {
-    se <- replicate(nboot, {
-      s <- rgamma(n, shape = 1); s <- s / mean(s)
-      mr_quantreg(beta_hat_y, beta_hat_x,
-                         sigma2_y, sigma2_x,
-                         weights = s, tau = tau_init, 
-                         se = NULL)$coefficients$Estimate
-    }) %>% sd()
+    se <- NA
+    
   } else if (se == "boot") {
     se <- replicate(nboot, {
       beta_hat_y_boot <- rnorm(n, mean = beta_hat_y, sd = sqrt(sigma2_y))
@@ -979,7 +973,6 @@ mr_quantreg <- function(beta_hat_y,
         se = NULL
       )$coefficients$Estimate
     }) %>% sd()
-    
   }
 
   # Print results if verbose
