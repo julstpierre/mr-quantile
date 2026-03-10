@@ -1,0 +1,57 @@
+---
+title: "MRQuantile"
+output: github_document
+vignette: >
+  %\VignetteIndexEntry{MRQuantile}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+### Overview
+This repository provides the **MRQuantile** R package to implement our weighted quantile regression model for two samples MR studies, along with scripts to reproduce the simulations and results described in our ongoing manuscript.
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  width = 60,
+  tidy = FALSE,
+  collapse = FALSE
+)
+```
+
+```{r setup, include = FALSE}
+if (!requireNamespace("MRQuantile", quietly = TRUE)) {
+  devtools::load_all()
+}
+```
+
+### Installation
+You can install the **MRQuantile** R package from GitHub using the `devtools` package:
+
+```{r MRQuantile setup, eval= FALSE}
+devtools::install_github("julstpierre/MRQuantile")
+```
+
+We can now load the package like any other R package. We’ll also load the **dplyr** package to use later in examples.
+```{r libraries, message = FALSE, warning = FALSE}
+library(MRQuantile)
+library(dplyr)
+```
+
+### Load example data
+We provide a dummy dataset in the package to illustrate how to use the `mr_quantile()` function. This dataset contains simulated summary statistics from 30 SNPs for one continuous exposure and one continuous outcome.
+```{r load-data}
+head(dummy_data)
+```
+
+### Fitting the model
+The function `mr_quantile()` fits a weighted quantile regression model using the asymmetric Laplace distribution. It takes as input the estimated effect sizes for the exposure and outcome with their variances, and returns a list with `coefficients`.
+```{r fit-model, message = FALSE}
+fit <- mr_quantile(
+  beta_hat_y = dummy_data$beta_hat_y,
+  beta_hat_x = dummy_data$beta_hat_x,
+  sigma2_y = dummy_data$sigma_y^2,
+  sigma2_x = dummy_data$sigma_x^2,
+  verbose = TRUE
+)
+fit$coefficients
+```
