@@ -9,11 +9,12 @@ library(purrr)
 library(stringr)
 library(readr)
 library(ggplot2)
+library(ggpubr)
 
 # -----------------------------
 # Parameters
 # -----------------------------
-sim_name <- c("main", "weak_invalid_IVs")[1]
+sim_name <- c("main", "weak_invalid_IVs")[2]
 results_dir <- paste0("../results/rds/", sim_name)
 plot_dir <- paste0("../results/plots/", sim_name)
 scenario_prefix <- "D_S"
@@ -132,7 +133,7 @@ if (sim_name == "weak_invalid_IVs") {
   filter(summary_stats, p == 30, n == 50000, q == 0.4) %>%
     print(width = Inf, n = Inf)
   
-  filter(summary_stats, p == 30, n == 50000, q == 0.6, InSIDE == TRUE) %>%
+  filter(summary_stats, p == 30, n == 50000, q == 0.6, InSIDE == FALSE) %>%
     print(width = Inf, n = Inf)
 }
 
@@ -141,25 +142,43 @@ if (sim_name == "weak_invalid_IVs") {
 # -----------------------------
 
 ## 0. Create color palette
-# method_levels <- c(
-#   "mr_cML", "mr_cML_DP", "mr_contmix", "mr_egger", "mr_ivw",
-#   "mr_ivw_oracle", "mr_lasso", "mr_median", "mr_mix",
-#   "mr_mode", "mr_presso", "mr_quantreg", "mr_raps"
-# )
-
 method_levels <- c(
-  "mr_cML", "mr_contmix", "mr_egger", "mr_ivw",
+  "mr_quantreg", "mr_cML", "mr_cML_DP", "mr_contmix", "mr_egger", "mr_ivw",
   "mr_ivw_oracle", "mr_lasso", "mr_median", "mr_mix",
-  "mr_mode", "mr_quantreg", "mr_raps"
+  "mr_mode", "mr_presso", "mr_raps"
 )
 
-tol12 <- c(
-  "#1F78B4", "grey", "black", "#E31A1C", "#FF7F00",
-  "#6A3D9A", "#A6CEE3", "#B2DF8A", "#FB9A99",
-  "#FDBF6F", "#33A02C", "#CC79A7", "#009E73", "#B15928"
+method_colors <- c(
+  mr_cML        = "#1F78B4",
+  mr_cML_DP     = "#6A3D9A",
+  mr_contmix    = "#2F4F4F",
+  mr_egger      = "#E31A1C",
+  mr_ivw        = "#FF7F00",
+  mr_ivw_oracle = "grey",
+  mr_lasso      = "#A6CEE3",
+  mr_median     = "#B2DF8A",
+  mr_mix        = "#00BFC4",
+  mr_mode       = "#FDBF6F",
+  mr_presso     = "#33A02C",
+  mr_quantreg   = "#CC79A7",
+  mr_raps       = "#B15928"
 )
 
-method_colors <- setNames(tol12, method_levels)
+method_labels <- c(
+  mr_cML        = "cML-MA-BIC",
+  mr_cML_DP     = "cML-MA-BIC-DP",
+  mr_contmix    = "MR-ContMix",
+  mr_egger      = "MR-Egger",
+  mr_ivw        = "MR-IVW",
+  mr_ivw_oracle = "MR-IVW (Oracle)",
+  mr_lasso      = "MR-Lasso",
+  mr_median     = "MR-Weighted-Median",
+  mr_mix        = "MR-Mix",
+  mr_mode       = "MR-Weighted-Mode",
+  mr_presso     = "MR-PRESSO",
+  mr_quantreg   = "MR-Quantile",
+  mr_raps       = "MR-RAPS"
+)
 
 ## 1. Plot Type-I error
 plot_typeI_error <- function(
@@ -169,37 +188,50 @@ plot_typeI_error <- function(
      facet_row,
      facet_col,
      facet_labels = list(),
-     title = ""
+     title = "",
+     methods = method_levels
 ) {
     
     facet_formula <- as.formula(paste(facet_row, "~", facet_col))
   
-    ggplot(filter(data, theta %in% theta_val, n %in% n_val), aes(x = theta, y = power, fill = method)) +
+    ggplot(filter(data, theta %in% theta_val, n %in% n_val, method %in% methods) %>%
+             mutate(method = factor(method, levels = methods)), 
+           aes(x = theta, y = power, fill = method)
+           ) +
       geom_bar(stat = "identity", position = "dodge") +
       geom_hline(aes(yintercept = 0.05), linetype = "dashed", color = "black") +
-      scale_fill_manual(values = method_colors, drop = FALSE) +
+      scale_fill_manual(
+        values = method_colors, 
+        labels = method_labels, 
+        drop = FALSE
+        ) +
       geom_text(
         aes(
-          y = power,
+          y = -Inf,                 # anchor to bottom of panel
           label = round(power, 3)
         ),
         position = position_dodge(width = 0.9),
-        vjust = -0.3, size = 2.5
+        vjust = 0.5,               # push text further down
+        angle = 45,                 # rotate text (change as you like)
+        size = 2
       ) +
+      coord_cartesian(clip = "off") +
       facet_grid(
         facet_formula,
         labeller = labeller(!!!facet_labels)
       ) +
-      theme_minimal(base_size = 13) +
+      theme_minimal(base_size = 11) +
       labs(
-    title = bquote("Type-I error, n = " * .(n_val) * ", \u03B8 = " * .(theta_val) * .(title)),
-    y = "Percentage significant",
+    # title = bquote("Type-I error, " * theta[0] == .(theta_val) * .(title)),
+    y = "% Type-I error",
     x = "Method"
   ) +
       theme(
         axis.text.x = element_blank(),
+        axis.title.x = element_text(margin = margin(t = 15, unit = "pt")),
         legend.position = "bottom",
-        legend.title = element_blank()
+        legend.title = element_blank(),
+        legend.text = element_text(margin = margin(r = 10, unit = "pt", l = 5))
       )
 }
 
@@ -210,10 +242,16 @@ if (sim_name == "weak_invalid_IVs"){
     facet_row = "h2_u",
     facet_col = "h2_y",
     facet_labels = list(
-      h2_y = function(x) paste0("h²ᵧ = ", x),
-      h2_u = function(x) paste0("h²ᵤ = ", x)
+      h2_y = function(x) paste0("h²y = ", x),
+      h2_u = function(x) paste0("h²u = ", x)
     )
   )
+  
+  # ggsave(filename = paste0(plot_dir, "/typeI_error.pdf"),
+  #        width = 10,
+  #        height = 7
+  # )
+  
 } else if (sim_name == "main"){
   plot_typeI_error(
     filter(summary_stats, InSIDE == TRUE),
@@ -222,10 +260,14 @@ if (sim_name == "weak_invalid_IVs"){
     facet_col = "q",
     facet_labels = list(
       p = function(x) paste0("p = ", x),
-      q = function(x) paste0("Invalid IVs = ", 100 * as.numeric(x), "%")
-    ),
-    title = ", InSIDE Hold"
+      q = function(x) paste0(100 * as.numeric(x), "% ", "Invalid IVs")
+    )
   )
+  
+  # ggsave(filename = paste0(plot_dir, "/typeI_error_InSIDE_hold.pdf"),
+  #        width = 10,
+  #        height = 7
+  # )
   
   plot_typeI_error(
     filter(summary_stats, InSIDE == FALSE),
@@ -234,10 +276,14 @@ if (sim_name == "weak_invalid_IVs"){
     facet_col = "q",
     facet_labels = list(
       p = function(x) paste0("p = ", x),
-      q = function(x) paste0("Invalid IVs = ", 100 * as.numeric(x), "%")
-    ),
-    title = ", InSIDE Violated"
+      q = function(x) paste0(100 * as.numeric(x), "% ", "Invalid IVs")
+    )
   )
+  
+  # ggsave(filename = paste0(plot_dir, "/typeI_error_InSIDE_violated.pdf"),
+  #        width = 10, 
+  #        height = 7
+  # )
 }
 
 ## 2. Plot Power
@@ -270,7 +316,8 @@ plot_power <- function(
       p %in% p_val,
       if (!is.null(methods)) method %in% methods else TRUE,
       if (!is.null(h2_u_val)) h2_u %in% h2_u_val else TRUE
-    ),
+    ) %>%
+        mutate(method = factor(method, levels = methods)),
     aes(x = theta, y = power, fill = method)
   ) +
     geom_bar(stat = "identity", position = "dodge") +
@@ -469,29 +516,139 @@ if (sim_name == "weak_invalid_IVs"){
 }
 
 # Plot bias
-filter(all_results, p == 30, theta == -0.1, n == 50000, q == 0.6, InSIDE == FALSE) %>%
-  # filter(!method %in% c("mr_mode")) %>%
-  mutate(bias = Estimate - theta) %>%
-  ggplot(aes(x = method, y = bias, fill = method, color = method)) +
-  geom_jitter(size = 0.2, alpha = 0.5, width = 0.1) +
-  geom_boxplot(width = 0.4, alpha = 0.5, outlier.shape = NA, color = "black") +
-  coord_cartesian(ylim = c(-0.1, 0.1)) +
-  scale_fill_manual(values = method_colors, drop = FALSE) +
-  scale_color_manual(values = method_colors, drop = FALSE) +
-  theme_minimal(base_size = 13) +
-  labs(
-    title = bquote("Bias distribution, n = " * .(50000) *
-      ", p = " * .(50) * ", Invalid IVs = " * .(0.6 * 100) * "%, " *
-      theta == .(0)
-    ),
-    y = "Bias",
-    x = "Method"
-  ) +
-  theme(
-    axis.text.x = element_blank(),
-    legend.position = "bottom",
-    legend.title = element_blank()
+library(ggpubr)
+
+# Function to create a single plot
+create_plot <- function(filter_expr, title = "") {
+  # Filter data for this combination
+  plot_data <- all_results %>%
+    filter({{ filter_expr }}) %>%
+    filter(method %in% method_levels) %>%
+    mutate(bias = Estimate - theta) %>%
+    add_row(method = "",) %>%
+    mutate(method = factor(method, levels = c("", method_levels)))
+  
+  # Calculate statistics
+  label_df <- plot_data %>%
+    group_by(method) %>%
+    summarise(
+      mean_bias = mean(bias, na.rm = TRUE),
+      sd = sd(Estimate, na.rm = TRUE),
+      rmse = sqrt(mean(bias^2, na.rm = TRUE)),
+      power = mean(LCL > 0 | UCL < 0, na.rm = TRUE),
+      .groups = "drop"
+    )
+  
+  # Create axis labels
+  bias_axis_labels <- setNames(
+    paste0(round(label_df$mean_bias, 3), "\n", 
+           round(label_df$sd, 3), "\n", 
+           round(label_df$rmse, 3),"\n", 
+           round(label_df$power, 3)),
+    label_df$method
   )
+  bias_axis_labels[1] <- "Bias\nSD\nRMSE\nPower "
+  
+  # Create plot
+  p <- plot_data %>%
+    ggplot(aes(x = method, y = Estimate, fill = method, color = method)) +
+    geom_jitter(size = 0.2, alpha = 0.5, width = 0.1) +
+    geom_boxplot(width = 0.4, alpha = 0.5, outlier.shape = NA, color = "black") +
+    scale_x_discrete(labels = bias_axis_labels) +
+    geom_hline(aes(yintercept = theta), linetype = "dashed", color = "black") +
+    coord_cartesian(ylim = c(plot_data$theta[1] - 0.1, plot_data$theta[1] + 0.1)) +
+    scale_fill_manual(values = method_colors, labels = method_labels, drop = FALSE) +
+    scale_color_manual(values = method_colors, labels = method_labels, drop = FALSE) +
+    theme_minimal(base_size = 11) +
+    labs(
+      title = title,
+      y = "",
+      x = ""
+    ) +
+    theme(
+      axis.text.x = element_text(hjust = 0, size = 6),
+      legend.position = "none",
+      legend.title = element_blank(),
+      plot.title = element_text(
+        hjust = 0.5,   # 0 = left, 0.5 = center, 1 = right
+        size  = 11,    # adjust to taste
+        face  = "plain"
+      )
+    )
+  
+  return(p)
+}
+
+# Main simulations
+p1 <- create_plot(filter_expr = p == 30 & q == 0.6 & InSIDE == FALSE & theta ==  0.1, title = expression(theta[0] == 0.1 * ", InSIDE Violated"))
+p2 <- create_plot(filter_expr = p == 30 & q == 0.6 & InSIDE == TRUE & theta ==  0.1, title = expression(theta[0] == 0.1 * ", InSIDE Hold"))
+p3 <- create_plot(filter_expr = p == 30 & q == 0.6 & InSIDE == FALSE & theta ==  -0.1, title = expression(theta[0] == -0.1 * ", InSIDE Violated"))
+p4 <- create_plot(filter_expr = p == 30 & q == 0.6 & InSIDE == TRUE & theta ==  -0.1, title = expression(theta[0] == -0.1 * ", InSIDE Hold"))
+
+# Combine plots
+combined_plot <- ggpubr::ggarrange(
+  p1, p2, p3, p4,
+  ncol = 2, nrow = 2,
+  common.legend = TRUE,
+  legend = "bottom"
+)
+
+# Add overall title if needed
+annotate_figure(combined_plot,
+                bottom = text_grob("Method", size = 11, vjust = -10, hjust = -0.4),
+                left = text_grob("Estimate", size = 11, rot = 90, hjust = -0.5, vjust = 2)
+)
+
+# Save plot
+ggsave(filename = paste0(plot_dir, "/boxplots_main.pdf"),
+               width = 10,
+               height = 7
+      )
+
+# Weak invalid IVs
+p1 <- create_plot(filter_expr = theta == -0.2 & h2_u == 0.1 & h2_y == 0.1, 
+                  title = expression(theta[0] == -0.2 ~ "," ~ h[y]^2 == 0.1 ~ "," ~ h[u]^2 == 0.1)
+                  )
+
+p2 <- create_plot(filter_expr = theta == 0.2 & h2_u == 0.1 & h2_y == 0.1, 
+                  title = expression(theta[0] == 0.2 ~ "," ~ h[y]^2 == 0.1 ~ "," ~ h[u]^2 == 0.1)
+)
+
+p3 <- create_plot(filter_expr = theta == -0.1 & h2_u == 0.1 & h2_y == 0.1, 
+                  title = expression(theta[0] == -0.1 ~ "," ~ h[y]^2 == 0.1 ~ "," ~ h[u]^2 == 0.1)
+)
+
+p4 <- create_plot(filter_expr = theta == 0.1 & h2_u == 0.1 & h2_y == 0.1, 
+                  title = expression(theta[0] == 0.1 ~ "," ~ h[y]^2 == 0.1 ~ "," ~ h[u]^2 == 0.1)
+)
+
+p5 <- create_plot(filter_expr = theta == -0.05 & h2_u == 0.1 & h2_y == 0.1, 
+                  title = expression(theta[0] == -0.05 ~ "," ~ h[y]^2 == 0.1 ~ "," ~ h[u]^2 == 0.1)
+)
+
+p6 <- create_plot(filter_expr = theta == 0.05 & h2_u == 0.1 & h2_y == 0.1, 
+                  title = expression(theta[0] == 0.05 ~ "," ~ h[y]^2 == 0.1 ~ "," ~ h[u]^2 == 0.1)
+)
+            
+# Combine plots
+combined_plot <- ggpubr::ggarrange(
+  p1, p2, p3, p4, p5, p6,
+  ncol = 2, nrow = 3,
+  common.legend = TRUE,
+  legend = "bottom"
+)
+
+# Add overall title if needed
+annotate_figure(combined_plot,
+                bottom = text_grob("Method", size = 11, vjust = -10, hjust = -0.4),
+                left = text_grob("Estimate", size = 11, rot = 90, hjust = -0.5, vjust = 2)
+)
+
+# Save plot
+ggsave(filename = paste0(plot_dir, "/boxplots_weak_invalid_IVs.pdf"),
+       width = 10,
+       height = 7
+)
 
 # -----------------------------
 # Done

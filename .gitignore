@@ -1,8 +1,9 @@
 .Rhistory
 .Rapp.history
 .DS_Store
-results/logs
-data/simulations/logs
-scripts/.ipynb_checkpoints/
+simulations/results/logs
+simulations/data/logs
+simulations/scripts/.ipynb_checkpoints/
 case_study
-scripts/.RDataTmp
+simulations/scripts/.RDataTmp
+README.Rmd

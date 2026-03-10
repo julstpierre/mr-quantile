@@ -215,9 +215,15 @@ fit_mr_cML_DP <- function(D){
 #---------------------------
 # Fit Quantile Regression
 #---------------------------
-fit_mr_quantreg <- function(D, se = "boot", verbose = FALSE, tau = NULL, nboot = 200){
+fit_mr_quantreg <- function(D, se = "boot", verbose = FALSE, tau = NULL, nboot = 1000){
   mr_quantreg(D$beta_hat_y, D$beta_hat_x, D$sigma2_y, D$sigma2_x, 
               se = se, verbose = verbose, tau = tau, nboot = nboot)$coefficients %>%
+    as_tibble()
+}
+
+fit_mr_quantreg_mv <- function(D, se = "boot", verbose = FALSE, tau = NULL, nboot = 200){
+  mr_quantreg_mv(D$beta_hat_y, as.matrix(D$beta_hat_x), D$sigma2_y, as.matrix(D$sigma2_x), 
+                 se = se, verbose = verbose, tau = tau, nboot = nboot)$coefficients %>%
     as_tibble()
 }
 
@@ -901,17 +907,17 @@ mr_quantreg <- function(beta_hat_y,
                               sigma2_y,
                               sigma2_x,
                               tau = NULL,
-                              lambda_init = 1,
+                              lambda = NULL,
                               theta_init = 0,
                               weights = rep(1, length(beta_hat_y)),
                               tol = 1e-5,
                               max_iter = 500,
                               se = "boot",
-                              nboot = 200,
+                              nboot = 1000,
                               verbose = FALSE) {
   
   n <- length(beta_hat_y)
-  
+    
   # Compute ratios
   ratios <- beta_hat_y / beta_hat_x
   ratios.se <- sqrt(sigma2_y / beta_hat_x^2 + beta_hat_y^2 * sigma2_x  / beta_hat_x^4)
@@ -919,7 +925,8 @@ mr_quantreg <- function(beta_hat_y,
   # Initialize parameters
   w_i <- 1 / ratios.se
   # w_i <- w_i * n / sum(w_i)  # normalize weights
-  lambda <- lambda_init
+  lambda_init <- lambda
+  lambda <- ifelse(is.null(lambda_init), 1, lambda_init)
   lambda_i <- lambda * w_i
   theta <- theta_init
   tau_init <- tau
@@ -940,8 +947,10 @@ mr_quantreg <- function(beta_hat_y,
     theta <- weighted_quantile(ratios, weights * w_i, tau )
     
     # Update lambda
-    lambda <- sum(weights) / sum(weights * w_i * rho_tau(ratios - theta, tau))
-    lambda_i <- lambda * w_i
+    if (is.null(lambda_init)){
+      lambda <- sum(weights) / sum(weights * w_i * rho_tau(ratios - theta, tau))
+      lambda_i <- lambda * w_i
+    }
     
     # Log-likelihood
     loglik <- sum(weights) * (log(lambda) + log(tau * (1 - tau))) -
@@ -968,13 +977,123 @@ mr_quantreg <- function(beta_hat_y,
         beta_hat_y_boot,
         beta_hat_x_boot,
         sigma2_y,
-        sigma2_x,
+        sigma2_x, 
         tau = tau_init,
+        lambda = lambda_init,
         se = NULL
       )$coefficients$Estimate
     }) %>% sd()
   }
 
+  # Print results if verbose
+  if (verbose) {
+    cat("Converged after", iter, "iterations\n")
+    cat("Estimated tau:", tau, "\n")
+    cat("Estimated lambda:", lambda, "\n")
+  }
+  
+  # Return data frame
+  list(
+    coefficients = data.frame(
+      Estimate = theta,
+      StdError = se,
+      LCL = theta - qnorm(0.975) * se,
+      UCL = theta + qnorm(0.975) * se
+    ),
+    tau = tau,
+    lambda = lambda,
+    aic = -2 * loglik + 2 * (2 + !is.null(tau_init)),
+    bic = -2 * loglik + log(n) * (2 + !is.null(tau_init))
+  )
+}
+
+#-----------------------------------------------
+# Multivariable quantile regression
+#-----------------------------------------------
+mr_quantreg_mv <- function(beta_hat_y,
+                        beta_hat_x,
+                        sigma2_y,
+                        sigma2_x,
+                        tau = NULL,
+                        lambda = NULL,
+                        theta_init = rep(0, ncol(beta_hat_x)),
+                        weights = rep(1, length(beta_hat_y)),
+                        tol = 1e-5,
+                        max_iter = 500,
+                        se = "boot",
+                        nboot = 200,
+                        verbose = FALSE) {
+  
+  # Dimensions
+  n <- length(beta_hat_y)
+  K <- ncol(beta_hat_x)
+  
+  # Initialize parameters
+  w_i <- 1 / sqrt(sigma2_y)
+  # w_i <- w_i * n / sum(w_i)  # normalize weights
+  lambda_init <- lambda
+  lambda <- ifelse(is.null(lambda_init), 1, lambda_init)
+  lambda_i <- lambda * w_i
+  theta <- theta_init
+  tau_init <- tau
+  tau <- ifelse(is.null(tau_init), 0.5, tau_init)
+  loglik_prev <- -Inf
+  
+  # Optimization loop
+  for (iter in 1:max_iter) {
+    
+    # Update tau
+    if (is.null(tau_init)){
+      a <- sum(weights * lambda_i * (beta_hat_y - beta_hat_x %*% theta))
+      tau <- ( a + 2 * sum(weights) - sqrt(a^2 + 4 * sum(weights)^2)) / ( 2 * a )
+      # tau <- min(max(tau, 0.1), 0.9)
+    }
+    
+    # Update theta
+    theta <- rq(beta_hat_y ~ beta_hat_x - 1, weights = weights * w_i, tau = tau)$coefficients
+    
+    # Update lambda
+    if (is.null(lambda_init)){
+      lambda <- sum(weights) / sum(weights * w_i * rho_tau(beta_hat_y - beta_hat_x %*% theta, tau))
+      lambda_i <- lambda * w_i
+    }
+    
+    # Log-likelihood
+    loglik <- sum(weights) * (log(lambda) + log(tau * (1 - tau))) -
+      lambda * sum(weights * w_i * rho_tau(beta_hat_y - beta_hat_x %*% theta, tau))
+    
+    # Convergence
+    if (abs(loglik - loglik_prev) < tol) break
+    loglik_prev <- loglik
+  }
+  
+  if (iter == max_iter)
+    warning("Maximum iterations reached without convergence.")
+  
+  # Bootstrap SE
+  if (is.null(se)){
+    se <- NA
+    
+  } else if (se == "boot") {
+    se <- replicate(nboot, {
+      beta_hat_y_boot <- rnorm(n, mean = beta_hat_y, sd = sqrt(sigma2_y))
+      beta_hat_x_boot <- sapply(1:K, 
+                                function(k){
+                                  rnorm(n, mean = beta_hat_x[, k], sd = sqrt(sigma2_x[, k]))
+                                }
+                        )
+      mr_quantreg(
+        beta_hat_y_boot,
+        beta_hat_x_boot,
+        sigma2_y,
+        sigma2_x, 
+        tau = tau_init,
+        lambda = lambda_init,
+        se = NULL
+      )$coefficients$Estimate
+    }) %>% sd()
+  }
+  
   # Print results if verbose
   if (verbose) {
     cat("Converged after", iter, "iterations\n")
