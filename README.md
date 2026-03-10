@@ -17,12 +17,10 @@ You can install the **MRQuantile** R package from GitHub using the
 devtools::install_github("julstpierre/MRQuantile")
 ```
 
-We can now load the package like any other R package. We’ll also load
-the **dplyr** package to use later in examples.
+We can now load the package like any other R package.
 
 ``` r
 library(MRQuantile)
-library(dplyr)
 ```
 
 ### Load example data
@@ -70,4 +68,4 @@ fit$coefficients
 ```
 
     ##    Estimate   StdError         LCL       UCL
-    ## 1 0.1284859 0.09033615 -0.04856965 0.3055415
+    ## 1 0.1284859 0.09075191 -0.04938454 0.3063564

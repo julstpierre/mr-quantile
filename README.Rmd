@@ -31,10 +31,9 @@ You can install the **MRQuantile** R package from GitHub using the `devtools` pa
 devtools::install_github("julstpierre/MRQuantile")
 ```
 
-We can now load the package like any other R package. We’ll also load the **dplyr** package to use later in examples.
+We can now load the package like any other R package.
 ```{r libraries, message = FALSE, warning = FALSE}
 library(MRQuantile)
-library(dplyr)
 ```
 
 ### Load example data
