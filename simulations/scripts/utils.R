@@ -58,13 +58,14 @@ sim_indv_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(theta = 0, p = 30, n = 20000, q = 0.6, InSIDE = TRUE)
+  # args <- list(theta = 0.1, p = 30, n = 50000, q = 0.6, InSIDE = FALSE, pi = 0.7)
   n <- args$n 
   theta <- args$theta
   p <- args$p
   q <- args$q
   m <- q * p
   InSIDE <- args$InSIDE
+  pi <- args$pi
   
   # Simulate genetic data, errors and invalid IVs
   maf <- runif(p, 0.1, 0.3)
@@ -82,7 +83,7 @@ sim_indv_dat <- function(args){
   U <- G %*% phi + epsilon_u
   
   # Simulate exposure
-  gamma <- runif(p, 0.1, 0.2) * sample(c(-1, 1), size = p, replace = TRUE)
+  gamma <- runif(p, 0.1, 0.2) * sample(c(-1, 1), size = p, replace = TRUE, prob = c(pi, 1 - pi))
   X <- G %*% gamma + U + epsilon_x
   
   # F-statistic
@@ -116,7 +117,8 @@ sim_indv_dat <- function(args){
               "q" = q,
               "invalid.IVs" = invalid.IVs,
               "alpha" = alpha,
-              "phi" = phi
+              "phi" = phi,
+              "gamma" = gamma
   )
   )
 }
@@ -215,24 +217,24 @@ fit_mr_cML_DP <- function(D){
 #---------------------------
 # Fit Quantile Regression
 #---------------------------
-fit_mr_quantreg <- function(D, se = "boot", verbose = FALSE, tau = NULL, nboot = 1000){
-  mr_quantreg(D$beta_hat_y, D$beta_hat_x, D$sigma2_y, D$sigma2_x, 
+fit_mr_quantile <- function(D, snps = 1:D$p, se = "boot", verbose = FALSE, tau = NULL, nboot = 1000){
+  mr_quantile(D$beta_hat_y[snps], D$beta_hat_x[snps], D$sigma2_y[snps], D$sigma2_x[snps], 
               se = se, verbose = verbose, tau = tau, nboot = nboot)$coefficients %>%
     as_tibble()
 }
 
-fit_mr_quantreg_mv <- function(D, se = "boot", verbose = FALSE, tau = NULL, nboot = 200){
-  mr_quantreg_mv(D$beta_hat_y, as.matrix(D$beta_hat_x), D$sigma2_y, as.matrix(D$sigma2_x), 
+fit_mr_quantile_mv <- function(D, se = "boot", verbose = FALSE, tau = NULL, nboot = 1000){
+  mr_quantile_mv(D$beta_hat_y, as.matrix(D$beta_hat_x), D$sigma2_y, as.matrix(D$sigma2_x), 
                  se = se, verbose = verbose, tau = tau, nboot = nboot)$coefficients %>%
     as_tibble()
 }
 
-fit_mr_quantreg_ma <- function(D, se = "boot", weights = "bic",
+fit_mr_quantile_ma <- function(D, se = "boot", weights = "bic",
                                tau_seq = seq(0.1, 0.9, by = 0.05), 
                                nboot = 200){
   
   res <- lapply(tau_seq, function(tau_val) {
-    fit <- mr_quantreg(D$beta_hat_y, 
+    fit <- mr_quantile(D$beta_hat_y, 
                        D$beta_hat_x,
                        D$sigma2_y,
                        D$sigma2_x,
@@ -899,129 +901,21 @@ mr_laplace_boot <- function(fit, nboot = 1000, alpha = 1, max_iter=5000, tol = 1
   
 }
 
-#---------------------------
-# Quantile regression using ratios
-#---------------------------
-mr_quantreg <- function(beta_hat_y,
-                              beta_hat_x,
-                              sigma2_y,
-                              sigma2_x,
-                              tau = NULL,
-                              lambda = NULL,
-                              theta_init = 0,
-                              weights = rep(1, length(beta_hat_y)),
-                              tol = 1e-5,
-                              max_iter = 500,
-                              se = "boot",
-                              nboot = 1000,
-                              verbose = FALSE) {
-  
-  n <- length(beta_hat_y)
-    
-  # Compute ratios
-  ratios <- beta_hat_y / beta_hat_x
-  ratios.se <- sqrt(sigma2_y / beta_hat_x^2 + beta_hat_y^2 * sigma2_x  / beta_hat_x^4)
-  
-  # Initialize parameters
-  w_i <- 1 / ratios.se
-  # w_i <- w_i * n / sum(w_i)  # normalize weights
-  lambda_init <- lambda
-  lambda <- ifelse(is.null(lambda_init), 1, lambda_init)
-  lambda_i <- lambda * w_i
-  theta <- theta_init
-  tau_init <- tau
-  tau <- ifelse(is.null(tau_init), 0.5, tau_init)
-  loglik_prev <- -Inf
-  
-  # Optimization loop
-  for (iter in 1:max_iter) {
-    
-    # Update tau
-    if (is.null(tau_init)){
-      a <- sum(weights * lambda_i * (ratios - theta))
-      tau <- ( a + 2 * sum(weights) - sqrt(a^2 + 4 * sum(weights)^2)) / ( 2 * a )
-      tau <- min(max(tau, 0.1), 0.9)
-    }
-    
-    # Update theta
-    theta <- weighted_quantile(ratios, weights * w_i, tau )
-    
-    # Update lambda
-    if (is.null(lambda_init)){
-      lambda <- sum(weights) / sum(weights * w_i * rho_tau(ratios - theta, tau))
-      lambda_i <- lambda * w_i
-    }
-    
-    # Log-likelihood
-    loglik <- sum(weights) * (log(lambda) + log(tau * (1 - tau))) -
-      lambda * sum(weights * w_i * rho_tau(ratios - theta, tau))
-    
-    # Convergence
-    if (abs(loglik - loglik_prev) < tol) break
-    loglik_prev <- loglik
-  }
-  
-  if (iter == max_iter)
-    warning("Maximum iterations reached without convergence.")
-  
-  # Bootstrap SE
-  if (is.null(se)){
-    se <- NA
-    
-  } else if (se == "boot") {
-    se <- replicate(nboot, {
-      beta_hat_y_boot <- rnorm(n, mean = beta_hat_y, sd = sqrt(sigma2_y))
-      beta_hat_x_boot <- rnorm(n, mean = beta_hat_x, sd = sqrt(sigma2_x))
-      
-      mr_quantreg(
-        beta_hat_y_boot,
-        beta_hat_x_boot,
-        sigma2_y,
-        sigma2_x, 
-        tau = tau_init,
-        lambda = lambda_init,
-        se = NULL
-      )$coefficients$Estimate
-    }) %>% sd()
-  }
-
-  # Print results if verbose
-  if (verbose) {
-    cat("Converged after", iter, "iterations\n")
-    cat("Estimated tau:", tau, "\n")
-    cat("Estimated lambda:", lambda, "\n")
-  }
-  
-  # Return data frame
-  list(
-    coefficients = data.frame(
-      Estimate = theta,
-      StdError = se,
-      LCL = theta - qnorm(0.975) * se,
-      UCL = theta + qnorm(0.975) * se
-    ),
-    tau = tau,
-    lambda = lambda,
-    aic = -2 * loglik + 2 * (2 + !is.null(tau_init)),
-    bic = -2 * loglik + log(n) * (2 + !is.null(tau_init))
-  )
-}
-
 #-----------------------------------------------
 # Multivariable quantile regression
 #-----------------------------------------------
-mr_quantreg_mv <- function(beta_hat_y,
+mr_quantile_mv <- function(beta_hat_y,
                         beta_hat_x,
                         sigma2_y,
                         sigma2_x,
                         tau = NULL,
                         lambda = NULL,
-                        theta_init = rep(0, ncol(beta_hat_x)),
+                        theta = NULL,
                         weights = rep(1, length(beta_hat_y)),
                         tol = 1e-5,
                         max_iter = 500,
                         se = "boot",
-                        nboot = 200,
+                        nboot = 1000,
                         verbose = FALSE) {
   
   # Dimensions
@@ -1029,12 +923,27 @@ mr_quantreg_mv <- function(beta_hat_y,
   K <- ncol(beta_hat_x)
   
   # Initialize parameters
-  w_i <- 1 / sqrt(sigma2_y)
+  theta_init <- theta
+  if (is.null(theta_init)) {
+    res   <- optimize(
+      Q_stat,
+      interval   = c(-10, 10),
+      beta_hat_x = beta_hat_x,
+      beta_hat_y = beta_hat_y,
+      sigma2_x   = sigma2_x,
+      sigma2_y   = sigma2_y
+    )
+    theta <- res$minimum
+  } else {
+    theta <- theta_init
+  }
+  w_i <- 1 / sqrt(sigma2_y + sigma2_x * theta^2)
+  
   # w_i <- w_i * n / sum(w_i)  # normalize weights
   lambda_init <- lambda
   lambda <- ifelse(is.null(lambda_init), 1, lambda_init)
   lambda_i <- lambda * w_i
-  theta <- theta_init
+
   tau_init <- tau
   tau <- ifelse(is.null(tau_init), 0.5, tau_init)
   loglik_prev <- -Inf
@@ -1045,8 +954,8 @@ mr_quantreg_mv <- function(beta_hat_y,
     # Update tau
     if (is.null(tau_init)){
       a <- sum(weights * lambda_i * (beta_hat_y - beta_hat_x %*% theta))
-      tau <- ( a + 2 * sum(weights) - sqrt(a^2 + 4 * sum(weights)^2)) / ( 2 * a )
-      # tau <- min(max(tau, 0.1), 0.9)
+      tau <- 0.5 - a / ( 2 * ( 2 * sum(weights) + sqrt ( a^2 + 4 * sum(weights)^2 ) ) )
+      tau <- min(max(tau, 0.1), 0.9)
     }
     
     # Update theta
@@ -1082,13 +991,14 @@ mr_quantreg_mv <- function(beta_hat_y,
                                   rnorm(n, mean = beta_hat_x[, k], sd = sqrt(sigma2_x[, k]))
                                 }
                         )
-      mr_quantreg(
+      mr_quantile_mv(
         beta_hat_y_boot,
         beta_hat_x_boot,
         sigma2_y,
         sigma2_x, 
         tau = tau_init,
         lambda = lambda_init,
+        theta = theta,
         se = NULL
       )$coefficients$Estimate
     }) %>% sd()
@@ -1114,4 +1024,9 @@ mr_quantreg_mv <- function(beta_hat_y,
     aic = -2 * loglik + 2 * (2 + !is.null(tau_init)),
     bic = -2 * loglik + log(n) * (2 + !is.null(tau_init))
   )
+}
+
+Q_stat <- function(theta, beta_hat_x, beta_hat_y, sigma2_x, sigma2_y) {
+  w_j <- beta_hat_x^2 / (theta^2 * sigma2_x + sigma2_y)
+  sum(w_j * (beta_hat_y - theta * beta_hat_x)^2)
 }

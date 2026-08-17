@@ -24,7 +24,8 @@ params <- expand.grid(
   theta = c(-0.1, 0, 0.1), 
   n = 50000,
   q = c(0, 0.2, 0.4, 0.6),
-  InSIDE = c(TRUE, FALSE)
+  InSIDE = c(TRUE, FALSE),
+  pi = 0.5
 ) %>%
   filter(!(InSIDE == FALSE & q == 0)) %>%
   mutate(num_iter = ifelse(theta == 0, 10000, 2000))

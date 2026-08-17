@@ -11,6 +11,7 @@ library(MRcML)
 
 # Load custom estimator functions
 source("utils.R")
+source("../../R/mr_quantile.R")
 # source("mrclust.R")
 
 # -----------------------------
@@ -62,8 +63,8 @@ if (methods == "fast") {
     tag_method(lapply(chunk, fit_mr_lasso), "mr_lasso"),
     tag_method(lapply(chunk, fit_mr_contmix), "mr_contmix"),
     tag_method(lapply(chunk, fit_mr_mix), "mr_mix"),
-    tag_method(lapply(chunk, fit_mr_quantreg, se = "boot"), "mr_quantreg"),
-    tag_method(lapply(chunk, fit_mr_quantreg_ma, se = "boot"), "mr_quantreg_ma"),
+    tag_method(lapply(chunk, fit_mr_quantile, se = "boot"), "mr_quantile"),
+    tag_method(lapply(chunk, fit_mr_quantile_ma, se = "boot"), "mr_quantile_ma"),
     tag_method(lapply(chunk, fit_mr_cML), "mr_cML")
   )
 }

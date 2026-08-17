@@ -11,7 +11,6 @@
 #' @param sigma2_x Numeric vector of variances of the SNP-exposure estimates.
 #' @param tau Optional quantile parameter. If `NULL`, it is estimated.
 #' @param lambda Optional scale parameter. If `NULL`, it is estimated.
-#' @param theta_init Initial value for the causal parameter.
 #' @param weights Optional vector of observation weights.
 #' @param tol Convergence tolerance for the log-likelihood.
 #' @param max_iter Maximum number of iterations for the optimization.
@@ -58,7 +57,6 @@ mr_quantile <- function(beta_hat_y,
                         sigma2_x,
                         tau = NULL,
                         lambda = NULL,
-                        theta_init = 0,
                         weights = rep(1, length(beta_hat_y)),
                         tol = 1e-5,
                         max_iter = 500,
@@ -68,41 +66,47 @@ mr_quantile <- function(beta_hat_y,
   
   n <- length(beta_hat_y)
   
+  # Compute ratios
   ratios <- beta_hat_y / beta_hat_x
   ratios.se <- sqrt(sigma2_y / beta_hat_x^2 +
                       beta_hat_y^2 * sigma2_x / beta_hat_x^4)
   
+  # Initialize parameters
   w_i <- 1 / ratios.se
   lambda_init <- lambda
   lambda <- ifelse(is.null(lambda_init), 1, lambda_init)
   lambda_i <- lambda * w_i
   
-  theta <- theta_init
   tau_init <- tau
   tau <- ifelse(is.null(tau_init), 0.5, tau_init)
   
+  # Optimization loop
   loglik_prev <- -Inf
   
   for (iter in 1:max_iter) {
     
-    if (is.null(tau_init)) {
-      a <- sum(weights * lambda_i * (ratios - theta))
-      tau <- (a + 2 * sum(weights) -
-                sqrt(a^2 + 4 * sum(weights)^2)) / (2 * a)
-      tau <- min(max(tau, 0.1), 0.9)
-    }
-    
+    # Update theta
     theta <- weighted_quantile(ratios, weights * w_i, tau)
     
+    # Update lambda
     if (is.null(lambda_init)) {
       lambda <- sum(weights) /
         sum(weights * w_i * rho_tau(ratios - theta, tau))
       lambda_i <- lambda * w_i
     }
     
+    # Update tau
+    if (is.null(tau_init)) {
+      a <- sum(weights * lambda_i * (ratios - theta))
+      tau <- 0.5 - a / ( 2 * ( 2 * sum(weights) + sqrt ( a^2 + 4 * sum(weights)^2 ) ) )
+      tau <- min(max(tau, 0.1), 0.9)
+    }
+    
+    # Log-likelihood
     loglik <- sum(weights) * (log(lambda) + log(tau * (1 - tau))) -
       lambda * sum(weights * w_i * rho_tau(ratios - theta, tau))
     
+    # Convergence
     if (abs(loglik - loglik_prev) < tol) break
     loglik_prev <- loglik
   }
@@ -110,6 +114,7 @@ mr_quantile <- function(beta_hat_y,
   if (iter == max_iter)
     warning("Maximum iterations reached without convergence.")
   
+  # Bootstrap SE
   if (is.null(se)) {
     se <- NA
   } else if (se == "boot") {
@@ -128,12 +133,14 @@ mr_quantile <- function(beta_hat_y,
     }) |> sd()
   }
   
+  # Print results if verbose
   if (verbose) {
     cat("Converged after", iter, "iterations\n")
     cat("Estimated tau:", tau, "\n")
     cat("Estimated lambda:", lambda, "\n")
   }
   
+  # Return list
   list(
     coefficients = data.frame(
       Estimate = theta,
