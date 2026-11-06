@@ -70,9 +70,9 @@ mr_quantile <- function(beta_hat_y,
   ratios <- beta_hat_y / beta_hat_x
   ratios.se <- sqrt(sigma2_y / beta_hat_x^2 +
                       beta_hat_y^2 * sigma2_x / beta_hat_x^4)
+  w_i <- 1 / ratios.se
   
   # Initialize parameters
-  w_i <- 1 / ratios.se
   lambda_init <- lambda
   lambda <- ifelse(is.null(lambda_init), 1, lambda_init)
   lambda_i <- lambda * w_i
@@ -116,21 +116,27 @@ mr_quantile <- function(beta_hat_y,
   
   # Bootstrap SE
   if (is.null(se)) {
-    se <- NA
+    theta_se <- NA
   } else if (se == "boot") {
     
-    se <- replicate(nboot, {
+    boot_mat <- replicate(nboot, {
       beta_hat_y_boot <- rnorm(n, beta_hat_y, sqrt(sigma2_y))
       beta_hat_x_boot <- rnorm(n, beta_hat_x, sqrt(sigma2_x))
       
-      mr_quantile(beta_hat_y_boot,
-                  beta_hat_x_boot,
-                  sigma2_y,
-                  sigma2_x,
-                  tau = tau_init,
-                  lambda = lambda_init,
-                  se = NULL)$coefficients$Estimate
-    }) |> sd()
+      fit_b <- mr_quantile(beta_hat_y_boot,
+                           beta_hat_x_boot,
+                           sigma2_y,
+                           sigma2_x,
+                           tau = tau_init,
+                           lambda = lambda_init,
+                           se = NULL)
+      
+      c(theta = fit_b$coefficients$Estimate,
+        tau   = fit_b$tau,
+        lambda = fit_b$lambda)
+    })
+    
+    theta_se <- sd(boot_mat["theta", ])
   }
   
   # Print results if verbose
@@ -144,13 +150,114 @@ mr_quantile <- function(beta_hat_y,
   list(
     coefficients = data.frame(
       Estimate = theta,
-      StdError = se,
-      LCL = theta - qnorm(0.975) * se,
-      UCL = theta + qnorm(0.975) * se
+      StdError = theta_se,
+      LCL = theta - qnorm(0.975) * theta_se,
+      UCL = theta + qnorm(0.975) * theta_se
     ),
     tau = tau,
     lambda = lambda,
-    aic = -2 * loglik + 2 * (2 + !is.null(tau_init)),
-    bic = -2 * loglik + log(n) * (2 + !is.null(tau_init))
+    aic = -2 * loglik + 2 * (2 + is.null(tau_init)),
+    bic = -2 * loglik + log(n) * (2 + is.null(tau_init))
+  )
+}
+
+mr_quantile_vm <- function(beta_hat_y,
+                           beta_hat_x,
+                           sigma2_y,
+                           sigma2_x,
+                           tau = NULL,
+                           weights = rep(1, length(beta_hat_y)),
+                           tol = 1e-5,
+                           max_iter = 500,
+                           se = "boot",
+                           nboot = 1000,
+                           verbose = FALSE) {
+  
+  n <- length(beta_hat_y)
+  
+  # Compute ratios
+  ratios <- beta_hat_y / beta_hat_x
+  ratios.se <- sqrt(sigma2_y / beta_hat_x^2 + beta_hat_y^2 * sigma2_x / beta_hat_x^4)
+  w_i <- 1 / ratios.se
+  
+  # Initialize parameters
+  tau_init <- tau
+  tau <- ifelse(is.null(tau_init), 0.5, tau_init)
+  c_tau <- function(t) sqrt(1 - 2*t + 2*t^2) / (t * (1 - t))
+  
+  loglik_prev <- -Inf
+  
+  for (iter in 1:max_iter) {
+    
+    # Update lambda
+    lambda_i <- c_tau(tau) * w_i
+    
+    # Update theta
+    theta <- weighted_quantile(ratios, weights * lambda_i, tau)
+    
+    # Update tau
+    if (is.null(tau_init)) {
+      tau_obj <- function(t) {
+        li <- c_tau(t) * w_i
+        sum(weights * (log(li) + log(t * (1 - t)))) -
+          sum(weights * li * rho_tau(ratios - theta, t))
+      }
+      opt <- optimize(tau_obj, interval = c(1e-4, 1 - 1e-4), maximum = TRUE)
+      tau <- opt$maximum
+    }
+    
+    # Log-likelihood
+    loglik <- sum(weights * (log(lambda_i) + log(tau * (1 - tau)))) -
+      sum(weights * lambda_i * rho_tau(ratios - theta, tau))
+    
+    if (abs(loglik - loglik_prev) < tol) break
+    loglik_prev <- loglik
+  }
+  
+  if (iter == max_iter) warning("Maximum iterations reached without convergence.")
+  
+  # Bootstrap SE
+  if (is.null(se)) {
+    theta_se <- NA
+  } else if (se == "boot") {
+    
+    boot_mat <- replicate(nboot, {
+      beta_hat_y_boot <- rnorm(n, beta_hat_y, sqrt(sigma2_y))
+      beta_hat_x_boot <- rnorm(n, beta_hat_x, sqrt(sigma2_x))
+      
+      fit_b <- mr_quantile_vm(beta_hat_y_boot,
+                           beta_hat_x_boot,
+                           sigma2_y,
+                           sigma2_x,
+                           tau = tau_init,
+                           se = NULL)
+      
+      c(theta = fit_b$coefficients$Estimate,
+        tau   = fit_b$tau,
+        lambda = fit_b$lambda)
+    })
+    
+    theta_se <- sd(boot_mat["theta", ])
+  }
+  
+  # Print results if verbose
+  if (verbose) {
+    cat("Converged after", iter, "iterations\n")
+    cat("Estimated tau:", tau, "\n")
+    cat("Estimated lambda:", c_tau(tau), "\n")
+  }
+  
+  # Return list
+  list(
+    coefficients = data.frame(
+      Estimate = theta,
+      StdError = theta_se,
+      LCL = theta - qnorm(0.975) * theta_se,
+      UCL = theta + qnorm(0.975) * theta_se
+    ),
+    tau = tau,
+    lambda =  c_tau(tau),
+    aic = -2 * loglik + 2 * (1 + is.null(tau_init)),
+    bic = -2 * loglik + log(n) * (1 + is.null(tau_init))
   )
 }

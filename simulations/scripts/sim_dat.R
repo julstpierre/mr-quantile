@@ -14,7 +14,8 @@ params <- expand.grid(
   h2_x = 0.5, 
   h2_y = c(0.1, 0.2, 0.4, 0.6), 
   h2_u = c(0, 0.1), 
-  q = 0.6
+  q = 0.6,
+  mu_alpha = 0
 ) %>%
   mutate(num_iter = ifelse(theta == 0, 10000, 2000))
 

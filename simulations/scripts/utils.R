@@ -7,7 +7,7 @@ sim_dat <- function(args){
   #--------------------------------------------------------------------------------
   # Define simulation parameters
   #--------------------------------------------------------------------------------
-  # args <- list(p = 50, n = 20000, theta = 0.1, h2_x = 0.5, h2_y = 0.1, h2_u = 0.1, q = 0.6)
+  # args <- list(p = 50, n = 20000, theta = 0.1, h2_x = 0.5, h2_y = 0.1, h2_u = 0.1, q = 0.6, mu_alpha = 0)
   p <- args$p
   n <- args$n
   theta <- args$theta
@@ -15,6 +15,7 @@ sim_dat <- function(args){
   h2_y <- args$h2_y
   h2_u <- args$h2_u
   q <- args$q
+  mu_alpha <- args$mu_alpha
   m <- q * p
   invalid.IVs <- seq_len(m)
   
@@ -25,7 +26,7 @@ sim_dat <- function(args){
   # Simulate uncorrelated pleiotropic effects
   sigma2_alpha <- h2_y / p
   alpha <- rep(0, p)
-  alpha[invalid.IVs] <- rnorm(m, mean = 0, sd = sqrt(sigma2_alpha))
+  alpha[invalid.IVs] <- rnorm(m, mean = mu_alpha, sd = sqrt(sigma2_alpha))
 
   # Simulate correlated pleiotropic effects
   sigma2_phi <- h2_u / p
@@ -219,6 +220,12 @@ fit_mr_cML_DP <- function(D){
 #---------------------------
 fit_mr_quantile <- function(D, snps = 1:D$p, se = "boot", verbose = FALSE, tau = NULL, nboot = 1000){
   mr_quantile(D$beta_hat_y[snps], D$beta_hat_x[snps], D$sigma2_y[snps], D$sigma2_x[snps], 
+              se = se, verbose = verbose, tau = tau, nboot = nboot)$coefficients %>%
+    as_tibble()
+}
+
+fit_mr_quantile_vm <- function(D, snps = 1:D$p, se = "boot", verbose = FALSE, tau = NULL, nboot = 1000){
+  mr_quantile_vm(D$beta_hat_y[snps], D$beta_hat_x[snps], D$sigma2_y[snps], D$sigma2_x[snps], 
               se = se, verbose = verbose, tau = tau, nboot = nboot)$coefficients %>%
     as_tibble()
 }

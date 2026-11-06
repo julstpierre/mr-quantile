@@ -28,8 +28,8 @@ methods <- args[5]              # e.g., "{fast, slow}"
 # -----------------------------
 # Load simulation data
 # -----------------------------
-for (f in list.files(paste0("../data/simulations/", scenario, "/"), pattern = "^D_S[0-9]+\\.RData$")) {
-  load(paste0("../data/simulations/", scenario, "/", f))
+for (f in list.files(paste0("../data/", scenario, "/"), pattern = "^D_S[0-9]+\\.RData$")) {
+  load(paste0("../data/", scenario, "/", f))
   rm(f)
 }
 D <- get(scenario_name)                # Extract the dataset corresponding to scenario_name
@@ -64,7 +64,7 @@ if (methods == "fast") {
     tag_method(lapply(chunk, fit_mr_contmix), "mr_contmix"),
     tag_method(lapply(chunk, fit_mr_mix), "mr_mix"),
     tag_method(lapply(chunk, fit_mr_quantile, se = "boot"), "mr_quantile"),
-    tag_method(lapply(chunk, fit_mr_quantile_ma, se = "boot"), "mr_quantile_ma"),
+    # tag_method(lapply(chunk, fit_mr_quantile_ma, se = "boot"), "mr_quantile_ma"),
     tag_method(lapply(chunk, fit_mr_cML), "mr_cML")
   )
 }

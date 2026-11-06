@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --output=../results/logs/%x_%A_%a.out
 
-cd ~/projects/def-mlegault/gf591137/mr-quantile/scripts/
+cd ~/projects/def-mlegault/gf591137/mr-quantile/simulations/scripts/
 module load r
 
 # -----------------------------
@@ -53,4 +53,4 @@ END_CHUNK=$((START_CHUNK + CHUNK_SIZE - 1))
 # -----------------------------
 echo "Running $SCENARIO, chunks $START_CHUNK to $END_CHUNK, fast methods"
 
-Rscript sim_estim.R "weak_invalid_IVs" $SCENARIO $START_CHUNK $END_CHUNK "fast"
+Rscript sim_estim.R "weak_invalid_IVs_supp" $SCENARIO $START_CHUNK $END_CHUNK "fast"

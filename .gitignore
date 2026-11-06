@@ -4,7 +4,8 @@
 simulations/results/logs
 simulations/data/logs
 simulations/scripts/.ipynb_checkpoints/
-case_study
+case_studies
 simulations/scripts/.RDataTmp
 README.Rmd
-.ipynb_checkpointssimulations/results/rds/
+.ipynb_checkpoints
+simulations/results/rds/
